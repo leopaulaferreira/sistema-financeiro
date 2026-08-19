@@ -70,6 +70,7 @@ public class TransactionService {
         return TransactionResponse.from(transaction);
     }
 
+    @Transactional(readOnly = true)
     public TransactionResponse get(Long userId, Long id) {
         return TransactionResponse.from(findOwned(userId, id));
     }
@@ -80,10 +81,11 @@ public class TransactionService {
         transactionRepository.delete(transaction);
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<TransactionResponse> search(Long userId, LocalDate from, LocalDate to, TransactionType type,
                                                       Long categoryId, Long accountId, int page, int size) {
-        Page<Transaction> result = transactionRepository.search(
-                userId, from, to, type, categoryId, accountId, PageRequest.of(page, size));
+        var spec = TransactionSpecifications.filter(userId, from, to, type, categoryId, accountId);
+        Page<Transaction> result = transactionRepository.findAll(spec, PageRequest.of(page, size));
         return PageResponse.from(result.map(TransactionResponse::from));
     }
 
