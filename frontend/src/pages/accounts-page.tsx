@@ -1,28 +1,42 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { Plus, Wallet } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/common/page-header'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/common/empty-state'
+import { ErrorState } from '@/components/common/error-state'
 import { StatCardSkeleton } from '@/components/common/loading-skeleton'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { AccountCard } from '@/features/accounts/components/account-card'
 import { AccountFormDialog } from '@/features/accounts/components/account-form-dialog'
-import { useMockAccounts } from '@/features/accounts/hooks/use-mock-accounts'
-import { mockTransactions } from '@/mocks'
-import { computeAccountBalance } from '@/lib/dashboard-calculations'
-import { useMockLoading } from '@/hooks/use-mock-loading'
+import { useAccountsQuery, useDeleteAccount, useUpdateAccount } from '@/features/accounts/hooks/use-accounts'
+import { useAccountsBalance } from '@/features/dashboard/hooks/use-dashboard'
+import { friendlyErrorMessage } from '@/services/api-error'
 import type { Account } from '@/types/finance'
 
 export function AccountsPage() {
-  const loading = useMockLoading()
-  const { accounts, createAccount, updateAccount, toggleActive } = useMockAccounts()
+  const { data: accounts, isPending, isError, error, refetch } = useAccountsQuery()
+  // accounts-balance exclui contas CREDIT_CARD (ARCHITECTURE.md §8.2) — para
+  // essas, não há saldo calculado disponível em nenhum endpoint; mostramos
+  // o saldo inicial como aproximação até existir um módulo de cartão.
+  const { data: accountsBalance } = useAccountsBalance()
+  const updateAccount = useUpdateAccount()
+  const deleteAccount = useDeleteAccount()
+
+  const balanceByAccountId = new Map((accountsBalance ?? []).map((b) => [b.accountId, b.balance]))
+
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Account | undefined>(undefined)
-
-  const balances = useMemo(() => {
-    const map = new Map<string, number>()
-    for (const account of accounts) map.set(account.id, computeAccountBalance(account, mockTransactions))
-    return map
-  }, [accounts])
+  const [deleting, setDeleting] = useState<Account | undefined>(undefined)
 
   function openCreate() {
     setEditing(undefined)
@@ -34,9 +48,28 @@ export function AccountsPage() {
     setFormOpen(true)
   }
 
-  function handleSubmit(data: Omit<Account, 'id'>) {
-    if (editing) updateAccount(editing.id, data)
-    else createAccount(data)
+  function handleToggleActive(account: Account) {
+    updateAccount.mutate(
+      { id: account.id, data: { name: account.name, type: account.type, initialBalance: account.initialBalance, active: !account.active } },
+      {
+        onSuccess: () => toast.success(account.active ? 'Conta desativada.' : 'Conta ativada.', { description: account.name }),
+        onError: (err) => toast.error('Não foi possível atualizar a conta.', { description: friendlyErrorMessage(err) }),
+      },
+    )
+  }
+
+  function handleDelete() {
+    if (!deleting) return
+    deleteAccount.mutate(deleting.id, {
+      onSuccess: () => {
+        toast.success('Conta excluída.', { description: deleting.name })
+        setDeleting(undefined)
+      },
+      onError: (err) => {
+        toast.error('Não foi possível excluir a conta.', { description: friendlyErrorMessage(err) })
+        setDeleting(undefined)
+      },
+    })
   }
 
   return (
@@ -52,12 +85,14 @@ export function AccountsPage() {
         }
       />
 
-      {loading ? (
+      {isPending ? (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {[1, 2, 3, 4].map((i) => (
             <StatCardSkeleton key={i} />
           ))}
         </div>
+      ) : isError ? (
+        <ErrorState error={error} onRetry={() => refetch()} title="Não foi possível carregar as contas" />
       ) : accounts.length === 0 ? (
         <EmptyState
           icon={Wallet}
@@ -75,16 +110,37 @@ export function AccountsPage() {
           {accounts.map((account) => (
             <AccountCard
               key={account.id}
-              account={account}
-              balance={balances.get(account.id) ?? 0}
+              name={account.name}
+              type={account.type}
+              balance={balanceByAccountId.get(account.id) ?? account.initialBalance}
+              active={account.active}
               onEdit={() => openEdit(account)}
-              onToggleActive={() => toggleActive(account.id)}
+              onToggleActive={() => handleToggleActive(account)}
+              onDelete={() => setDeleting(account)}
             />
           ))}
         </div>
       )}
 
-      <AccountFormDialog open={formOpen} onOpenChange={setFormOpen} account={editing} onSubmit={handleSubmit} />
+      <AccountFormDialog open={formOpen} onOpenChange={setFormOpen} account={editing} />
+
+      <AlertDialog open={!!deleting} onOpenChange={(open) => !open && setDeleting(undefined)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir conta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação remove "{deleting?.name}" permanentemente. Se houver transações vinculadas a ela, a exclusão
+              será bloqueada.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-danger text-danger-foreground hover:bg-danger/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

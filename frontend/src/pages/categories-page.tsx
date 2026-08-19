@@ -1,24 +1,25 @@
 import { useState } from 'react'
 import { Plus } from 'lucide-react'
+import { toast } from 'sonner'
 import { PageHeader } from '@/components/common/page-header'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { TableSkeleton } from '@/components/common/loading-skeleton'
+import { ErrorState } from '@/components/common/error-state'
 import { CategoryList } from '@/features/categories/components/category-list'
 import { CategoryFormDialog } from '@/features/categories/components/category-form-dialog'
-import { useMockCategories } from '@/features/categories/hooks/use-mock-categories'
-import { useMockLoading } from '@/hooks/use-mock-loading'
+import { useCategoriesQuery, useDeleteCategory } from '@/features/categories/hooks/use-categories'
+import { friendlyErrorMessage } from '@/services/api-error'
 import type { Category, TransactionType } from '@/types/finance'
 
 export function CategoriesPage() {
-  const loading = useMockLoading()
-  const { categories, createCategory, updateCategory, deleteCategory } = useMockCategories()
+  const income = useCategoriesQuery('INCOME')
+  const expense = useCategoriesQuery('EXPENSE')
+  const deleteCategory = useDeleteCategory()
+
   const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<Category | undefined>(undefined)
   const [defaultType, setDefaultType] = useState<TransactionType>('EXPENSE')
-
-  const income = categories.filter((c) => c.type === 'INCOME')
-  const expense = categories.filter((c) => c.type === 'EXPENSE')
 
   function openCreate(type: TransactionType) {
     setEditing(undefined)
@@ -31,9 +32,11 @@ export function CategoriesPage() {
     setFormOpen(true)
   }
 
-  function handleSubmit(data: Omit<Category, 'id'>) {
-    if (editing) updateCategory(editing.id, data)
-    else createCategory(data)
+  function handleDelete(category: Category) {
+    deleteCategory.mutate(category.id, {
+      onSuccess: () => toast.success('Categoria excluída.', { description: category.name }),
+      onError: (err) => toast.error('Não foi possível excluir a categoria.', { description: friendlyErrorMessage(err) }),
+    })
   }
 
   return (
@@ -58,7 +61,15 @@ export function CategoriesPage() {
               Adicionar
             </Button>
           </CardHeader>
-          <CardContent>{loading ? <TableSkeleton rows={3} /> : <CategoryList categories={income} onEdit={openEdit} onDelete={(c) => deleteCategory(c.id)} />}</CardContent>
+          <CardContent>
+            {income.isPending ? (
+              <TableSkeleton rows={3} />
+            ) : income.isError ? (
+              <ErrorState error={income.error} onRetry={() => income.refetch()} />
+            ) : (
+              <CategoryList categories={income.data} onEdit={openEdit} onDelete={handleDelete} />
+            )}
+          </CardContent>
         </Card>
 
         <Card>
@@ -69,11 +80,19 @@ export function CategoriesPage() {
               Adicionar
             </Button>
           </CardHeader>
-          <CardContent>{loading ? <TableSkeleton rows={5} /> : <CategoryList categories={expense} onEdit={openEdit} onDelete={(c) => deleteCategory(c.id)} />}</CardContent>
+          <CardContent>
+            {expense.isPending ? (
+              <TableSkeleton rows={5} />
+            ) : expense.isError ? (
+              <ErrorState error={expense.error} onRetry={() => expense.refetch()} />
+            ) : (
+              <CategoryList categories={expense.data} onEdit={openEdit} onDelete={handleDelete} />
+            )}
+          </CardContent>
         </Card>
       </div>
 
-      <CategoryFormDialog open={formOpen} onOpenChange={setFormOpen} category={editing} defaultType={defaultType} onSubmit={handleSubmit} />
+      <CategoryFormDialog open={formOpen} onOpenChange={setFormOpen} category={editing} defaultType={defaultType} />
     </div>
   )
 }

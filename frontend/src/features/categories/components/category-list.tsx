@@ -63,8 +63,8 @@ export function CategoryList({ categories, onEdit, onDelete }: CategoryListProps
                 <AlertDialogHeader>
                   <AlertDialogTitle>Excluir categoria?</AlertDialogTitle>
                   <AlertDialogDescription>
-                    Esta ação removerá "{category.name}" da lista. Transações que já usam essa categoria não serão
-                    alteradas nesta fase (dados mockados).
+                    Esta ação remove "{category.name}" permanentemente. Se houver transações vinculadas a ela, a
+                    exclusão será bloqueada.
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
