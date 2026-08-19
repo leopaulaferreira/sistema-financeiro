@@ -101,7 +101,12 @@ public abstract class AbstractIntegrationTest {
     }
 
     protected AccountResponse createAccount(Session session, String name) throws Exception {
-        AccountRequest request = new AccountRequest(name, AccountType.CHECKING, BigDecimal.valueOf(100));
+        return createAccount(session, name, AccountType.CHECKING, BigDecimal.valueOf(100));
+    }
+
+    protected AccountResponse createAccount(Session session, String name, AccountType type, BigDecimal initialBalance)
+            throws Exception {
+        AccountRequest request = new AccountRequest(name, type, initialBalance);
         MvcResult result = mockMvc.perform(authed(post("/api/accounts"), session)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(json(request)))
