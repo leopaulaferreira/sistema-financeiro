@@ -5,6 +5,7 @@ import { SidebarContent } from './sidebar'
 import { Topbar } from './topbar'
 import { paths } from '@/routes/paths'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { Footer } from '@/components/common/footer'
 
 const pageTitles: Record<string, string> = {
   [paths.dashboard]: 'Dashboard',
@@ -41,6 +42,7 @@ export function AppLayout() {
               <Outlet />
             </div>
           </main>
+          <Footer />
         </div>
       </div>
     </TooltipProvider>
