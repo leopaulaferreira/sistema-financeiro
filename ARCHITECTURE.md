@@ -376,15 +376,30 @@ frontend/
 
 ## 8. Cálculo dos dados do dashboard
 
-Todos os agregados são calculados sob demanda via queries JPQL/nativas com
-`SUM`/`GROUP BY`, filtradas sempre por `user_id` e pelo período solicitado.
+Todos os agregados são calculados no Postgres via `SUM`/`GROUP BY`
+(`TransactionRepository`/`AccountRepository`), filtrados sempre por
+`user_id` — nenhum endpoint carrega a lista de transações do usuário para
+somar em memória Java. Implementado na Fase 3.
 
-- **Total de receitas do mês**: `SUM(amount) WHERE user_id=:u AND type='INCOME' AND date BETWEEN :start AND :end`
-- **Total de despesas do mês**: idem com `type='EXPENSE'`
-- **Economia do mês**: `totalIncome - totalExpense` (calculado em memória no service)
-- **Saldo total** (disponibilidade financeira — ver seção 10.6): `SUM(account.initial_balance) + SUM(transaction.amount WHERE type=INCOME) - SUM(transaction.amount WHERE type=EXPENSE)`, sem filtro de data, **restrito a contas com `type <> 'CREDIT_CARD'`** — cartões representam dívida, não disponibilidade, e não entram nessa soma
-- **Gastos por categoria**: `GROUP BY category_id`, período do mês, ordenado por soma decrescente
-- **Receitas x despesas (série temporal)**: `GROUP BY date_trunc('month', date), type`, últimos N meses (padrão 6)
+### 8.1 Semântica de período (`year`/`month`)
+
+`year=2026&month=8` representa o intervalo **half-open** `[2026-08-01,
+2026-09-01)` — ou seja, `date >= from AND date < to` com
+`to = from.plusMonths(1)`. Evita ambiguidade de fuso/limite que um `BETWEEN`
+inclusive nos dois extremos teria em torno da virada do mês. `Transaction.date`
+é `DATE` (sem componente de hora), então essa comparação é direta, sem
+conversão de timezone envolvida.
+
+### 8.2 Fórmulas
+
+- **`totalIncome`** (do mês): `SUM(amount) WHERE user_id=:u AND type=INCOME AND date >= :from AND date < :to`. Não filtra por tipo de conta — inclui, por exemplo, uma despesa lançada num cartão de crédito, pois representa o que foi efetivamente gasto/recebido no mês.
+- **`totalExpenses`** (do mês): idem com `type=EXPENSE`.
+- **`netSavings`**: `totalIncome - totalExpenses` (calculado em Java a partir dos dois totais já agregados, não é uma query própria).
+- **`availableBalance`** (disponibilidade financeira — ver seção 10.6): `SUM(account.initial_balance) + SUM(transaction.amount WHERE type=INCOME) - SUM(transaction.amount WHERE type=EXPENSE)`, **restrito a contas com `type <> CREDIT_CARD`**, cumulativo **até `to` (exclusivo)** — não apenas do mês consultado, mas de todo o histórico até o fim do período. Uma despesa lançada num cartão de crédito não reduz esse número: ainda não saiu do caixa, é dívida futura (diferente de `totalExpenses`, que inclui gastos no cartão).
+- **Gastos por categoria**: `GROUP BY category_id`, só `type=EXPENSE`, período do mês, ordenado por soma decrescente. Só retorna categorias com pelo menos uma despesa — lista vazia quando não há despesas no período (evita divisão por zero no cálculo de `percentage`, que é feito em Java com `RoundingMode.HALF_UP` e escala 2).
+- **Receitas x despesas (série temporal)**: granularidade **diária** — o endpoint é sempre escopado a um único mês (`year`+`month`), então dia é a granularidade natural (~28–31 pontos, adequado para um gráfico). Dias sem nenhuma transação são preenchidos com zero pelo Service (não pela query — o Postgres só retorna dias com movimentação; o Service gera a lista completa de dias do mês e usa zero como default), para que o frontend receba um eixo temporal contínuo sem buracos para tratar.
+- **Últimas transações**: `ORDER BY date DESC, id DESC` (determinístico mesmo com múltiplas transações no mesmo dia), `LIMIT` fornecido pelo cliente mas sempre capado em 50 no Service, independente do que for enviado.
+- **Saldo por conta**: `initial_balance + SUM(income vinculada à conta) - SUM(expense vinculada à conta)`, cumulativo (sem filtro de período). **Contas `CREDIT_CARD` são excluídas da resposta** — não só do somatório de disponibilidade, mas do endpoint inteiro (`GET /api/dashboard/accounts-balance`) — porque a semântica real de "saldo" de um cartão (fatura, fechamento, pagamento parcial) ainda não existe (módulo de cartão é fase futura); aplicar a mesma fórmula ingenuamente produziria um número que parece um saldo mas não significa o que o usuário esperaria ver.
 
 ## 9. Modelo de dados
 
@@ -770,9 +785,13 @@ Transactions
   DELETE /api/transactions/{id}
 
 Dashboard
-  GET    /api/dashboard/summary?month=&year=
-  GET    /api/dashboard/expenses-by-category?month=&year=
-  GET    /api/dashboard/income-vs-expense?months=6
+  GET    /api/dashboard/summary?year=&month=
+  GET    /api/dashboard/expenses-by-category?year=&month=
+  GET    /api/dashboard/income-vs-expense?year=&month=
+         (revisado na Fase 3: granularidade diária dentro de um único mês,
+         não janela de N meses — ver seção 8.2)
+  GET    /api/dashboard/recent-transactions?limit=
+  GET    /api/dashboard/accounts-balance
 ```
 
 Paginação: offset-based (`page`, `size`).
