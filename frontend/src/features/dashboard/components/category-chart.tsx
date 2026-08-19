@@ -4,11 +4,19 @@ import { formatCurrency, formatPercentage } from '@/lib/format'
 import { EmptyState } from '@/components/common/empty-state'
 import { PieChart as PieChartIcon } from 'lucide-react'
 
+/** CategoryExpenseResponse não traz cor — cai aqui quando a categoria não está mais na lista atual. */
+const FALLBACK_COLOR = 'var(--muted-foreground)'
+
 interface CategoryChartProps {
   data: CategoryExpense[]
+  colorByCategoryId: Map<number, string>
 }
 
-function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: CategoryExpense }[] }) {
+interface ChartDatum extends CategoryExpense {
+  color: string
+}
+
+function ChartTooltip({ active, payload }: { active?: boolean; payload?: { payload: ChartDatum }[] }) {
   if (!active || !payload?.length) return null
   const item = payload[0].payload
 
@@ -25,7 +33,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { paylo
   )
 }
 
-export function CategoryChart({ data }: CategoryChartProps) {
+export function CategoryChart({ data, colorByCategoryId }: CategoryChartProps) {
   if (data.length === 0) {
     return (
       <EmptyState
@@ -36,12 +44,17 @@ export function CategoryChart({ data }: CategoryChartProps) {
     )
   }
 
+  const chartData: ChartDatum[] = data.map((entry) => ({
+    ...entry,
+    color: colorByCategoryId.get(entry.categoryId) ?? FALLBACK_COLOR,
+  }))
+
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
       <ResponsiveContainer width="100%" height={220} className="sm:max-w-[220px]">
         <PieChart>
           <Pie
-            data={data}
+            data={chartData}
             dataKey="amount"
             nameKey="categoryName"
             innerRadius="62%"
@@ -49,7 +62,7 @@ export function CategoryChart({ data }: CategoryChartProps) {
             paddingAngle={2}
             strokeWidth={0}
           >
-            {data.map((entry) => (
+            {chartData.map((entry) => (
               <Cell key={entry.categoryId} fill={entry.color} />
             ))}
           </Pie>
@@ -58,7 +71,7 @@ export function CategoryChart({ data }: CategoryChartProps) {
       </ResponsiveContainer>
 
       <ul className="flex min-w-0 flex-1 flex-col gap-2.5">
-        {data.map((entry) => (
+        {chartData.map((entry) => (
           <li key={entry.categoryId} className="flex items-center gap-2.5 text-sm">
             <span className="size-2.5 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} aria-hidden />
             <span className="min-w-0 flex-1 truncate text-text-primary">{entry.categoryName}</span>
