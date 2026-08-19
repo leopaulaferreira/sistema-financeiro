@@ -1,0 +1,16 @@
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+
+app:
+  jwt:
+    # Segredo usado apenas em testes automatizados — não é um segredo real.
+    secret: test-only-secret-value-not-used-anywhere-else-32bytes-minimum
+    access-token-expiration-minutes: 15
+    refresh-token-expiration-days: 30
+  cookie:
+    secure: false
+  cors:
+    allowed-origin: http://localhost:5173

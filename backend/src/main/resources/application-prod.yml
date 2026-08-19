@@ -1,0 +1,12 @@
+# Perfil de produção. Nenhum valor sensível tem default aqui de propósito:
+# a aplicação falha ao subir (fail-fast) se DB_URL, DB_USERNAME, DB_PASSWORD
+# ou JWT_SECRET não forem fornecidos via variável de ambiente do systemd unit.
+app:
+  cookie:
+    secure: ${COOKIE_SECURE:true}
+
+logging:
+  level:
+    root: INFO
+    com.financeapp: INFO
+    org.springframework.security: WARN

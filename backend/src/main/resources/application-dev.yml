@@ -1,0 +1,22 @@
+# Perfil de desenvolvimento local.
+# Os valores abaixo são placeholders NÃO sensíveis (apontam para o Postgres
+# descartável do docker-compose.dev.yml). Nunca usados em produção — o
+# perfil "prod" não define defaults e falha ao subir sem as variáveis reais.
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/sistema_financeiro}
+    username: ${DB_USERNAME:sistema_financeiro_app}
+    password: ${DB_PASSWORD:dev-only-password-not-used-in-production}
+  jpa:
+    show-sql: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-insecure-secret-please-override-me-32bytes-min}
+  cookie:
+    # Secure=false em dev pois o navegador não envia cookies "Secure" fora de HTTPS.
+    secure: ${COOKIE_SECURE:false}
+
+logging:
+  level:
+    com.financeapp: DEBUG
