@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
+import { Loader2 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,19 +8,22 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { cn } from '@/lib/utils'
 import { iconOptions } from '../icon-options'
+import { useCreateCategory, useUpdateCategory } from '../hooks/use-categories'
+import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
 import type { Category, TransactionType } from '@/types/finance'
 
+/** Hex — o backend valida `^#[0-9A-Fa-f]{6}$` (CategoryRequest.color). */
 const categoryColors = [
-  'oklch(0.64 0.19 293)',
-  'oklch(0.78 0.12 210)',
-  'oklch(0.72 0.17 149)',
-  'oklch(0.79 0.15 80)',
-  'oklch(0.65 0.21 25)',
-  'oklch(0.62 0.2 300)',
-  'oklch(0.7 0.19 45)',
-  'oklch(0.66 0.2 340)',
-  'oklch(0.72 0.18 60)',
-  'oklch(0.75 0.14 190)',
+  '#8b5cf6',
+  '#22d3ee',
+  '#22c55e',
+  '#f59e0b',
+  '#ef4444',
+  '#a855f7',
+  '#f97316',
+  '#ec4899',
+  '#eab308',
+  '#14b8a6',
 ]
 
 const defaultIcon = Object.keys(iconOptions)[0]
@@ -29,10 +33,9 @@ interface CategoryFormDialogProps {
   onOpenChange: (open: boolean) => void
   category?: Category
   defaultType?: TransactionType
-  onSubmit: (data: Omit<Category, 'id'>) => void
 }
 
-export function CategoryFormDialog({ open, onOpenChange, category, defaultType, onSubmit }: CategoryFormDialogProps) {
+export function CategoryFormDialog({ open, onOpenChange, category, defaultType }: CategoryFormDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
@@ -45,9 +48,7 @@ export function CategoryFormDialog({ open, onOpenChange, category, defaultType, 
             key={category?.id ?? 'new'}
             category={category}
             defaultType={defaultType}
-            onSubmit={onSubmit}
-            onCancel={() => onOpenChange(false)}
-            onSuccess={() => onOpenChange(false)}
+            onDone={() => onOpenChange(false)}
           />
         )}
       </DialogContent>
@@ -55,30 +56,60 @@ export function CategoryFormDialog({ open, onOpenChange, category, defaultType, 
   )
 }
 
-interface CategoryFormProps {
+type FieldErrors = Partial<Record<'name' | 'type' | 'color' | 'icon', string>>
+
+function CategoryForm({
+  category,
+  defaultType,
+  onDone,
+}: {
   category?: Category
   defaultType?: TransactionType
-  onSubmit: (data: Omit<Category, 'id'>) => void
-  onCancel: () => void
-  onSuccess: () => void
-}
-
-function CategoryForm({ category, defaultType, onSubmit, onCancel, onSuccess }: CategoryFormProps) {
+  onDone: () => void
+}) {
   const [name, setName] = useState(category?.name ?? '')
   const [type, setType] = useState<TransactionType>(category?.type ?? defaultType ?? 'EXPENSE')
   const [color, setColor] = useState(category?.color ?? categoryColors[0])
   const [icon, setIcon] = useState(category?.icon ?? defaultIcon)
-  const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({})
+  const [formError, setFormError] = useState('')
+
+  const createCategory = useCreateCategory()
+  const updateCategory = useUpdateCategory()
+  const submitting = createCategory.isPending || updateCategory.isPending
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setFormError('')
+    setFieldErrors({})
+
     if (!name.trim()) {
-      setError('Informe um nome para a categoria.')
+      setFieldErrors({ name: 'Informe um nome para a categoria.' })
       return
     }
-    onSubmit({ name: name.trim(), type, color, icon })
-    toast.success(category ? 'Categoria atualizada.' : 'Categoria criada.', { description: name.trim() })
-    onSuccess()
+
+    const payload = { name: name.trim(), type, color, icon }
+    const mutation = category
+      ? updateCategory.mutateAsync({ id: category.id, data: payload })
+      : createCategory.mutateAsync(payload)
+
+    mutation
+      .then(() => {
+        toast.success(category ? 'Categoria atualizada.' : 'Categoria criada.', { description: name.trim() })
+        onDone()
+      })
+      .catch((error: unknown) => {
+        if (error instanceof ApiClientError && error.errors.length > 0) {
+          const next: FieldErrors = {}
+          for (const fe of error.errors) {
+            if (fe.field === 'name' || fe.field === 'type' || fe.field === 'color' || fe.field === 'icon') {
+              next[fe.field] = fe.message
+            }
+          }
+          setFieldErrors(next)
+        }
+        setFormError(friendlyErrorMessage(error))
+      })
   }
 
   return (
@@ -99,7 +130,14 @@ function CategoryForm({ category, defaultType, onSubmit, onCancel, onSuccess }: 
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="cat-name">Nome</Label>
-        <Input id="cat-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Supermercado" />
+        <Input
+          id="cat-name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ex.: Supermercado"
+          aria-invalid={!!fieldErrors.name}
+        />
+        {fieldErrors.name && <p className="text-xs text-danger">{fieldErrors.name}</p>}
       </div>
 
       <div className="flex flex-col gap-2">
@@ -138,15 +176,19 @@ function CategoryForm({ category, defaultType, onSubmit, onCancel, onSuccess }: 
             />
           ))}
         </div>
+        {fieldErrors.color && <p className="text-xs text-danger">{fieldErrors.color}</p>}
       </div>
 
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {formError && <p className="text-xs text-danger">{formError}</p>}
 
       <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onCancel}>
+        <Button type="button" variant="ghost" onClick={onDone} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit">{category ? 'Salvar alterações' : 'Criar categoria'}</Button>
+        <Button type="submit" disabled={submitting}>
+          {submitting && <Loader2 className="size-4 animate-spin" />}
+          {category ? 'Salvar alterações' : 'Criar categoria'}
+        </Button>
       </div>
     </form>
   )
