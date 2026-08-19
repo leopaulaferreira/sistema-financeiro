@@ -1,0 +1,25 @@
+# Backend (Maven / Java)
+backend/target/
+backend/.mvn/wrapper/maven-wrapper.jar
+*.class
+*.log
+
+# Frontend (futuro)
+frontend/node_modules/
+frontend/dist/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# SO
+.DS_Store
+
+# Segredos / ambiente local — nunca versionar
+.env
+.env.*
+!.env.example
+
+# Testcontainers
+.testcontainers.properties
