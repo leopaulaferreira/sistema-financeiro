@@ -1,8 +1,8 @@
 export interface TransactionFiltersState {
-  period: 'ALL' | '2026-08' | '2026-07'
+  period: 'ALL' | 'CURRENT' | 'PREVIOUS'
   type: 'ALL' | 'INCOME' | 'EXPENSE'
-  categoryId: string
-  accountId: string
+  categoryId: 'ALL' | string
+  accountId: 'ALL' | string
 }
 
 export const defaultTransactionFilters: TransactionFiltersState = {
