@@ -410,31 +410,33 @@ CREATE TABLE refresh_tokens (
 );
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens (user_id);
 
-CREATE TYPE account_type AS ENUM ('CHECKING', 'SAVINGS', 'WALLET', 'CREDIT_CARD', 'INVESTMENT');
+-- Tipos como VARCHAR + CHECK em vez de enum nativo do Postgres — decisão
+-- tomada na Fase 2 (ver nota abaixo): mesma integridade, sem a fricção de
+-- mapeamento JPA/Hibernate que enums nativos exigem.
 
 CREATE TABLE accounts (
-    id                     BIGSERIAL PRIMARY KEY,
-    user_id                BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    name                   VARCHAR(80) NOT NULL,
-    type                   account_type NOT NULL,
-    initial_balance        NUMERIC(12,2) NOT NULL DEFAULT 0,
-    currency               CHAR(3) NOT NULL DEFAULT 'BRL',
-    archived               BOOLEAN NOT NULL DEFAULT FALSE,
-    -- colunas abaixo ficam NULL até a Fase de cartão de crédito (ver seção 10);
+    id               BIGSERIAL PRIMARY KEY,
+    user_id          BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name             VARCHAR(80) NOT NULL,
+    type             VARCHAR(20) NOT NULL CHECK (type IN ('CHECKING', 'SAVINGS', 'WALLET', 'CREDIT_CARD', 'INVESTMENT')),
+    initial_balance  NUMERIC(12,2) NOT NULL DEFAULT 0,
+    active           BOOLEAN NOT NULL DEFAULT TRUE,
+    -- colunas abaixo ficam ausentes até a Fase de cartão de crédito (ver seção 10);
     -- criadas por migração própria quando aquele módulo for implementado, não agora.
     -- credit_limit           NUMERIC(12,2),
     -- statement_closing_day  SMALLINT,
     -- payment_due_day        SMALLINT,
-    created_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TYPE transaction_type AS ENUM ('INCOME', 'EXPENSE');
+CREATE INDEX idx_accounts_user ON accounts (user_id);
 
 CREATE TABLE categories (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name       VARCHAR(60) NOT NULL,
-    type       transaction_type NOT NULL,
+    type       VARCHAR(20) NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
     color      VARCHAR(7),
     icon       VARCHAR(40),
     is_default BOOLEAN NOT NULL DEFAULT FALSE,
@@ -442,16 +444,18 @@ CREATE TABLE categories (
     UNIQUE (user_id, name, type)
 );
 
-CREATE TYPE payment_method_type AS ENUM ('CASH', 'DEBIT_CARD', 'CREDIT_CARD', 'PIX', 'BANK_TRANSFER', 'OTHER');
+CREATE INDEX idx_categories_user_type ON categories (user_id, type);
 
 CREATE TABLE payment_methods (
     id         BIGSERIAL PRIMARY KEY,
     user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name       VARCHAR(60) NOT NULL,
-    type       payment_method_type NOT NULL,
+    type       VARCHAR(20) NOT NULL CHECK (type IN ('CASH', 'DEBIT_CARD', 'CREDIT_CARD', 'PIX', 'BANK_TRANSFER', 'OTHER')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, name)
 );
+
+CREATE INDEX idx_payment_methods_user ON payment_methods (user_id);
 
 CREATE TABLE transactions (
     id                     BIGSERIAL PRIMARY KEY,
@@ -461,10 +465,10 @@ CREATE TABLE transactions (
     payment_method_id      BIGINT NOT NULL REFERENCES payment_methods(id),
     description            VARCHAR(160) NOT NULL,
     amount                 NUMERIC(12,2) NOT NULL CHECK (amount > 0),
-    type                   transaction_type NOT NULL,
+    type                   VARCHAR(20) NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
     date                   DATE NOT NULL,
     notes                  VARCHAR(500),
-    -- colunas abaixo ficam NULL até as Fases 6 e "cartão de crédito" respectivamente;
+    -- colunas abaixo ficam ausentes até as Fases 6 e "cartão de crédito" respectivamente;
     -- adição de coluna NULL sem default é operação de metadado no Postgres,
     -- não exige rewrite de tabela nem backfill — por isso não precisam existir agora.
     -- recurring_transaction_id BIGINT REFERENCES recurring_transactions(id),
@@ -479,18 +483,30 @@ CREATE INDEX idx_transactions_user_date       ON transactions (user_id, date DES
 CREATE INDEX idx_transactions_user_type_date  ON transactions (user_id, type, date);
 CREATE INDEX idx_transactions_user_category   ON transactions (user_id, category_id);
 CREATE INDEX idx_transactions_user_account    ON transactions (user_id, account_id);
-CREATE INDEX idx_categories_user_type         ON categories (user_id, type);
 ```
 
-Notas de modelagem (inalteradas desde a v1):
+Notas de modelagem:
 
 - `amount` é sempre positivo; o sinal é dado pelo `type`.
 - `initial_balance` representa o saldo "ponto de partida" antes do
   histórico registrado no app.
-- `categories`/`payment_methods` são por usuário; no registro, o backend
-  faz *seed* de um conjunto padrão (`is_default = true`).
+- `categories`/`payment_methods` são por usuário; seed automático de um
+  conjunto padrão no registro **ainda não implementado** — ficou fora do
+  escopo explícito da Fase 2 (CRUD), fica para quando fizer sentido.
 - Sem soft delete no MVP: `DELETE` físico, bloqueado com `409 Conflict`
-  se houver transações vinculadas.
+  se houver transações vinculadas — vale para accounts, categories e
+  payment_methods (Fase 2).
+- **Desvio implementado na Fase 2:** `accounts` não tem mais a coluna
+  `currency` (sistema é mono-moeda BRL, coluna fixa nunca variava — sem
+  ganho em mantê-la) e `archived` foi renomeada para `active`
+  (equivalente, apenas polaridade invertida). `updated_at` foi adicionado
+  a `accounts` (faltava na v1 do desenho). Enums nativos do Postgres
+  (`CREATE TYPE ... AS ENUM`) foram trocados por `VARCHAR + CHECK` em
+  todas as tabelas — o mapeamento JPA/Hibernate para enum nativo exige
+  anotações extras (`@JdbcTypeCode`) sensíveis à versão, enquanto
+  `@Enumerated(STRING)` contra uma coluna `VARCHAR` funciona sem fricção
+  e com a mesma integridade via `CHECK`. Também elimina por completo a
+  restrição de `ALTER TYPE ... ADD VALUE` discutida na seção 9.3.4.
 
 ### 9.2 Visão final do domínio — entidades futuras (não criadas agora)
 
@@ -599,13 +615,14 @@ e por isso não precisa ser antecipado:
 3. **Entidades novas e autocontidas (budgets, goals) não tocam nas tabelas
    existentes** — apenas referenciam `category_id`/`account_id` como
    chave estrangeira opcional. Zero risco de retrabalho.
-4. **Enums nativos do Postgres** (`account_type`, `transaction_type`,
-   `payment_method_type`) podem receber novos valores via
-   `ALTER TYPE ... ADD VALUE` em qualquer momento; a única restrição é que
-   o novo valor não pode ser *usado* na mesma transação/migração em que
-   foi adicionado — por isso cada migração Flyway que introduz um valor de
-   enum é separada da migração que passa a usá-lo. Restrição conhecida,
-   sem impacto prático no ritmo de desenvolvimento por fases.
+4. **Tipos enumerados como `VARCHAR + CHECK`** (`account_type`,
+   `transaction_type`, `payment_method_type` — decisão revisada na Fase 2,
+   ver seção 9.1): adicionar um novo valor é só um novo `CHECK` na próxima
+   migração (`ALTER TABLE ... DROP CONSTRAINT ... ADD CONSTRAINT ...`),
+   sem a restrição de `ALTER TYPE ... ADD VALUE` não poder ser usado na
+   mesma transação em que é criado — e sem exigir anotações JPA extras
+   (`@JdbcTypeCode`) sensíveis à versão do Hibernate para mapear enum
+   nativo do Postgres.
 5. **`payment_method` e `account` continuam sendo conceitos distintos**:
    `account` é *de onde/para onde* o dinheiro se move (inclusive um cartão
    de crédito, ver seção 10); `payment_method` é *o instrumento* usado. Um
@@ -744,7 +761,9 @@ Payment methods
   DELETE /api/payment-methods/{id}
 
 Transactions
-  GET    /api/transactions?from=&to=&type=&categoryId=&accountId=&paymentMethodId=&page=&size=&sort=
+  GET    /api/transactions?from=&to=&type=&categoryId=&accountId=&page=&size=
+         (filtro por paymentMethodId e sort customizável ficam para quando houver
+         necessidade real — ordenação fixa por date desc, id desc por enquanto)
   POST   /api/transactions
   GET    /api/transactions/{id}
   PUT    /api/transactions/{id}
