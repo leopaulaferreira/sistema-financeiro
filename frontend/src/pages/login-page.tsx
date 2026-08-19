@@ -5,17 +5,27 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { paths } from '@/routes/paths'
+import { useAuth } from '@/features/auth/auth-context'
+import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
 
 export function LoginPage() {
   const navigate = useNavigate()
+  const { login } = useAuth()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     setSubmitting(true)
-    setTimeout(() => navigate(paths.dashboard), 500)
+    login({ email, password })
+      .then(() => navigate(paths.dashboard))
+      .catch((err: unknown) => {
+        setError(err instanceof ApiClientError && err.status === 401 ? err.message : friendlyErrorMessage(err))
+      })
+      .finally(() => setSubmitting(false))
   }
 
   return (
@@ -51,6 +61,8 @@ export function LoginPage() {
             placeholder="••••••••"
           />
         </div>
+
+        {error && <p className="text-sm text-danger">{error}</p>}
 
         <Button type="submit" className="mt-2 w-full" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
