@@ -48,13 +48,22 @@ public class AuthService {
         return UserResponse.from(user);
     }
 
+    // Hash BCrypt de uma senha que nunca será usada — existe só para que a
+    // comparação abaixo tenha custo de CPU semelhante quando o e-mail não
+    // existe, evitando que o tempo de resposta revele (timing side-channel)
+    // se um e-mail está ou não cadastrado.
+    private static final String DUMMY_HASH =
+            "$2a$10$7EqJtq98hPqEX7fNZaFWoOhi5L4pt1LO0FSuODrJUSSg8jUOTbG7O";
+
     @Transactional
     public LoginResult login(LoginRequest request, String userAgent) {
         String normalizedEmail = request.email().trim().toLowerCase();
-        User user = userRepository.findByEmail(normalizedEmail)
-                .orElseThrow(() -> new InvalidCredentialsException("E-mail ou senha inválidos"));
+        User user = userRepository.findByEmail(normalizedEmail).orElse(null);
 
-        if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
+        String hashToCompare = user != null ? user.getPasswordHash() : DUMMY_HASH;
+        boolean matches = passwordEncoder.matches(request.password(), hashToCompare);
+
+        if (user == null || !matches) {
             throw new InvalidCredentialsException("E-mail ou senha inválidos");
         }
 
