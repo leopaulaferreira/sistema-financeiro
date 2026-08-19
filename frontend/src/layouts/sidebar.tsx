@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { LogOut, Settings, Wallet2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { navItems } from './nav-items'
@@ -6,6 +6,8 @@ import { paths } from '@/routes/paths'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { Separator } from '@/components/ui/separator'
+import { useAuth } from '@/features/auth/auth-context'
+import { initials } from '@/lib/format'
 
 interface SidebarContentProps {
   collapsed?: boolean
@@ -13,6 +15,14 @@ interface SidebarContentProps {
 }
 
 export function SidebarContent({ collapsed = false, onNavigate }: SidebarContentProps) {
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    onNavigate?.()
+    logout().finally(() => navigate(paths.login))
+  }
+
   return (
     <div className="flex h-full flex-col">
       <div className={cn('flex h-16 shrink-0 items-center gap-2 px-4', collapsed && 'justify-center px-0')}>
@@ -44,27 +54,27 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
         />
 
         <FooterItem collapsed={collapsed}>
-          <NavLink
-            to={paths.login}
-            onClick={onNavigate}
+          <button
+            type="button"
+            onClick={handleLogout}
             className={cn(
-              'flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-foreground',
+              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               collapsed && 'justify-center px-0',
             )}
           >
             <Avatar className="size-7 shrink-0">
               <AvatarFallback className="bg-accent-secondary/20 text-xs font-medium text-accent-secondary">
-                LP
+                {initials(user?.name ?? '?')}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <span className="flex min-w-0 flex-1 flex-col text-left">
-                <span className="truncate text-sm font-medium text-foreground">Leonardo Paula</span>
-                <span className="truncate text-xs text-text-secondary">leonardo@email.com</span>
+                <span className="truncate text-sm font-medium text-foreground">{user?.name}</span>
+                <span className="truncate text-xs text-text-secondary">{user?.email}</span>
               </span>
             )}
             {!collapsed && <LogOut className="size-4 shrink-0 text-text-secondary" aria-hidden />}
-          </NavLink>
+          </button>
         </FooterItem>
       </div>
     </div>
