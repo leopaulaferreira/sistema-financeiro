@@ -48,7 +48,7 @@ seguro) o uso de cookies de autenticação.
 | Estado UI    | Zustand (sidebar, tema, filtros de UI)                       |
 | Formulários  | react-hook-form + zod                                         |
 | Gráficos     | Recharts                                                        |
-| Backend      | Java 21 + Spring Boot 3                                          |
+| Backend      | Java 21 + Spring Boot 4.1 (revisado na Fase 1 — Boot 3 já sem suporte OSS ativo quando a implementação começou) |
 | Persistência | Spring Data JPA / Hibernate                                       |
 | Auth         | Spring Security — JWT em cookie HttpOnly (não localStorage), com CSRF |
 | Migrações    | Flyway                                                              |
@@ -183,7 +183,7 @@ Modelo de dois tokens:
 | Token | Onde vive | Duração | Cookie |
 |---|---|---|---|
 | **Access token** | JWT assinado, stateless | curta (15 min) | `access_token` — `HttpOnly; Secure*; SameSite=Strict; Path=/` |
-| **Refresh token** | JWT assinado + hash persistido no Postgres | longa (30 dias) | `refresh_token` — `HttpOnly; Secure*; SameSite=Strict; Path=/api/auth/refresh` |
+| **Refresh token** | Valor opaco aleatório (256 bits) + hash SHA-256 persistido no Postgres — revisado na Fase 1: não é um JWT (ver nota abaixo) | longa (30 dias) | `refresh_token` — `HttpOnly; Secure*; SameSite=Strict; Path=/api/auth/refresh` |
 | **CSRF token** | valor aleatório legível por JS | igual à sessão | `XSRF-TOKEN` — `Secure*; SameSite=Strict; Path=/` (sem HttpOnly, precisa ser lido pelo frontend) |
 
 `*Secure` é habilitado apenas em produção (HTTPS). Em desenvolvimento local
@@ -193,6 +193,13 @@ do Spring (`application-dev.yml` vs `application-prod.yml`).
 O refresh token fica com o **path restrito** a `/api/auth/refresh`, então o
 navegador só o envia nesse endpoint específico — reduz a exposição do
 token de longa duração nas demais chamadas.
+
+> **Desvio implementado na Fase 1:** o refresh token deixou de ser um JWT e
+> passou a ser um valor opaco aleatório (32 bytes via `SecureRandom`,
+> Base64URL). Sua validade **sempre** depende de uma consulta ao banco
+> (verificar revogação/expiração/reuso), então ser um JWT autocontido não
+> trazia nenhuma vantagem — apenas superfície extra de parsing. O access
+> token continua sendo o único JWT do sistema.
 
 ### 5.2 Por que refresh token com tabela no Postgres (não Redis)
 
