@@ -18,13 +18,13 @@ import java.util.List;
  * sem contexto de tipo suficiente. Com Specification, cada predicado só
  * entra na query quando o filtro correspondente não é nulo.
  */
-final class TransactionSpecifications {
+public final class TransactionSpecifications {
 
     private TransactionSpecifications() {
     }
 
-    static Specification<Transaction> filter(Long userId, LocalDate from, LocalDate to, TransactionType type,
-                                               Long categoryId, Long accountId) {
+    public static Specification<Transaction> filter(Long userId, LocalDate from, LocalDate to, TransactionType type,
+                                                      Long categoryId, Long accountId) {
         return (root, query, cb) -> {
             // Fetch join só faz sentido na query de conteúdo — a query de
             // contagem gerada internamente para a paginação tem resultado
