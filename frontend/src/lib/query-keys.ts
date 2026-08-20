@@ -1,4 +1,4 @@
-import type { TransactionSearchParams } from '@/types/requests'
+import type { RecurringTransactionSearchParams, TransactionSearchParams } from '@/types/requests'
 
 /** Chaves centralizadas para evitar strings soltas espalhadas pelos hooks. */
 export const queryKeys = {
@@ -7,6 +7,7 @@ export const queryKeys = {
   paymentMethods: ['payment-methods'] as const,
   transactions: (params: TransactionSearchParams) => ['transactions', params] as const,
   transaction: (id: number) => ['transactions', 'detail', id] as const,
+  recurringTransactions: (params?: RecurringTransactionSearchParams) => ['recurring-transactions', params ?? {}] as const,
   dashboard: ['dashboard'] as const,
   dashboardSummary: (year: number, month: number) => ['dashboard', 'summary', year, month] as const,
   dashboardExpensesByCategory: (year: number, month: number) =>

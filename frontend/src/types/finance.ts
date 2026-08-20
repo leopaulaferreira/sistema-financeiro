@@ -82,3 +82,28 @@ export interface AccountBalance {
   accountType: AccountType
   balance: number
 }
+
+export type RecurrenceFrequency = 'DAILY' | 'WEEKLY' | 'MONTHLY' | 'YEARLY'
+
+/** Referência resumida a conta/categoria/método de pagamento dentro de RecurringTransactionResponse. */
+export interface RecurringTransactionRef {
+  id: number
+  name: string
+}
+
+/** Espelha com.financeapp.recurring.dto.RecurringTransactionResponse. Gera Transactions — nunca as substitui. */
+export interface RecurringTransaction {
+  id: number
+  description: string
+  amount: number
+  type: TransactionType
+  frequency: RecurrenceFrequency
+  startDate: string
+  endDate: string | null
+  nextExecutionDate: string
+  lastExecutionDate: string | null
+  active: boolean
+  account: RecurringTransactionRef
+  category: RecurringTransactionRef
+  paymentMethod: RecurringTransactionRef
+}
