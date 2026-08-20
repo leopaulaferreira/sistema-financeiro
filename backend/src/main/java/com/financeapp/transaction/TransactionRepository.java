@@ -17,6 +17,9 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
 
     Optional<Transaction> findByIdAndUserId(Long id, Long userId);
 
+    /** Usado por testes de idempotência/catch-up da Fase 6 — produção nunca precisa listar por regra. */
+    List<Transaction> findAllByRecurringTransactionIdOrderByRecurrenceDateAsc(Long recurringTransactionId);
+
     boolean existsByAccountId(Long accountId);
 
     boolean existsByCategoryId(Long categoryId);

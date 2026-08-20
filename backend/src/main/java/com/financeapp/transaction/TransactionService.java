@@ -10,6 +10,7 @@ import com.financeapp.common.exception.ResourceNotFoundException;
 import com.financeapp.common.pagination.PageResponse;
 import com.financeapp.paymentmethod.PaymentMethod;
 import com.financeapp.paymentmethod.PaymentMethodRepository;
+import com.financeapp.recurring.RecurringTransaction;
 import com.financeapp.transaction.dto.TransactionRequest;
 import com.financeapp.transaction.dto.TransactionResponse;
 import com.financeapp.user.User;
@@ -55,6 +56,29 @@ public class TransactionService {
                 normalizeNotes(request.notes()));
         transactionRepository.save(transaction);
         return TransactionResponse.from(transaction);
+    }
+
+    /**
+     * Cria a Transaction gerada por uma ocorrência de recorrência (Fase 6).
+     * Reaproveita a mesma entidade/invariantes de {@link #create}, mas os
+     * relacionamentos já vêm resolvidos e verificados pelo
+     * {@code RecurringTransactionService} no momento em que a regra foi
+     * criada/editada — o processador não repete essas checagens de posse a
+     * cada execução, só confia no que a regra já validou. {@code @Transactional}
+     * aqui entra na MESMA transação de banco do chamador (propagação
+     * REQUIRED, padrão), o que é essencial para a atomicidade descrita em
+     * {@code RecurringTransactionProcessor}: gerar a Transaction e avançar
+     * {@code nextExecutionDate} da regra precisam comitar juntos ou não
+     * comitar nenhum dos dois.
+     */
+    @Transactional
+    public Transaction createFromRecurrence(RecurringTransaction source, LocalDate recurrenceDate) {
+        Transaction transaction = new Transaction(source.getUser(), source.getAccount(), source.getCategory(),
+                source.getPaymentMethod(), source.getDescription(), source.getAmount(), source.getType(),
+                recurrenceDate, null);
+        transaction.linkToRecurrence(source, recurrenceDate);
+        transactionRepository.save(transaction);
+        return transaction;
     }
 
     @Transactional

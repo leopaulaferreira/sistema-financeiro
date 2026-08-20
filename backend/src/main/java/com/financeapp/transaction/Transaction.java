@@ -4,6 +4,7 @@ import com.financeapp.account.Account;
 import com.financeapp.category.Category;
 import com.financeapp.common.TransactionType;
 import com.financeapp.paymentmethod.PaymentMethod;
+import com.financeapp.recurring.RecurringTransaction;
 import com.financeapp.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -68,6 +69,22 @@ public class Transaction {
     @Column(length = 500)
     private String notes;
 
+    /**
+     * Preenchidos apenas quando esta Transaction foi gerada por uma
+     * recorrência (Fase 6) — ambos {@code null} para toda transação criada
+     * manualmente. {@code recurrenceDate} é a data da ocorrência específica
+     * (não necessariamente igual a {@code date}, embora hoje sempre
+     * coincidam); a dupla (recurringTransaction, recurrenceDate) é única no
+     * banco (migration V3) — última linha de defesa contra geração
+     * duplicada da mesma ocorrência.
+     */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recurring_transaction_id")
+    private RecurringTransaction recurringTransaction;
+
+    @Column(name = "recurrence_date")
+    private LocalDate recurrenceDate;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -103,6 +120,12 @@ public class Transaction {
         this.type = type;
         this.date = date;
         this.notes = notes;
+    }
+
+    /** Chamado apenas pelo processador de recorrências (Fase 6), nunca pelo fluxo manual de criação. */
+    public void linkToRecurrence(RecurringTransaction recurringTransaction, LocalDate recurrenceDate) {
+        this.recurringTransaction = recurringTransaction;
+        this.recurrenceDate = recurrenceDate;
     }
 
     @PreUpdate
@@ -148,6 +171,14 @@ public class Transaction {
 
     public String getNotes() {
         return notes;
+    }
+
+    public RecurringTransaction getRecurringTransaction() {
+        return recurringTransaction;
+    }
+
+    public LocalDate getRecurrenceDate() {
+        return recurrenceDate;
     }
 
     public Instant getCreatedAt() {
