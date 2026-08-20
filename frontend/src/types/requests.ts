@@ -1,4 +1,4 @@
-import type { AccountType, PaymentMethodType, RecurrenceFrequency, TransactionType } from './finance'
+import type { AccountType, GoalStatus, PaymentMethodType, RecurrenceFrequency, TransactionType } from './finance'
 
 /** Espelha com.financeapp.auth.dto.RegisterRequest. */
 export interface RegisterRequest {
@@ -91,4 +91,48 @@ export interface RecurringTransactionSearchParams {
   type?: TransactionType
   active?: boolean
   frequency?: RecurrenceFrequency
+}
+
+/** Espelha com.financeapp.budget.dto.BudgetCreateRequest/BudgetUpdateRequest — PUT substitui o registro inteiro. */
+export interface BudgetCreateRequest {
+  categoryId: number
+  year: number
+  month: number
+  amount: number
+}
+
+export type BudgetUpdateRequest = BudgetCreateRequest
+
+export interface BudgetSearchParams {
+  year?: number
+  month?: number
+  categoryId?: number
+}
+
+/** Espelha com.financeapp.goal.dto.FinancialGoalCreateRequest. */
+export interface FinancialGoalCreateRequest {
+  name: string
+  description?: string | null
+  targetAmount: number
+  targetDate?: string | null
+}
+
+/**
+ * Espelha com.financeapp.goal.dto.FinancialGoalUpdateRequest. `status` só
+ * aceita ACTIVE/CANCELLED — COMPLETED é sempre derivado automaticamente
+ * pelo backend a partir das contribuições (rejeitado com 400 se enviado).
+ */
+export interface FinancialGoalUpdateRequest extends FinancialGoalCreateRequest {
+  status: Exclude<GoalStatus, 'COMPLETED'>
+}
+
+export interface GoalSearchParams {
+  status?: GoalStatus
+}
+
+/** Espelha com.financeapp.goal.dto.GoalContributionCreateRequest. */
+export interface GoalContributionCreateRequest {
+  amount: number
+  date: string
+  note?: string | null
 }
