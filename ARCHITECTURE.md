@@ -656,47 +656,106 @@ lançamento atômico.
   agregação passa a somar `recurring_transactions`. Previsão e realizado
   nunca se misturam num mesmo número.
 
-**`budgets`** (Fase 7) — orçamento mensal, opcionalmente por categoria:
+**`budgets`** (Fase 7, implementada — migration `V4`) — orçamento mensal por
+categoria:
 
 ```sql
 CREATE TABLE budgets (
     id           BIGSERIAL PRIMARY KEY,
     user_id      BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    category_id  BIGINT REFERENCES categories(id),  -- NULL = orçamento geral do mês
-    month        SMALLINT NOT NULL,
-    year         SMALLINT NOT NULL,
-    amount_limit NUMERIC(12,2) NOT NULL CHECK (amount_limit > 0),
+    category_id  BIGINT NOT NULL REFERENCES categories(id),
+    year         INTEGER NOT NULL,
+    month        INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
+    amount       NUMERIC(12,2) NOT NULL CHECK (amount > 0),
     created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (user_id, category_id, month, year)
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, category_id, year, month)
 );
 ```
 
-Autocontido — não exige nenhuma alteração em `transactions`, `accounts` ou
-`categories`; a comparação orçado x realizado é feita em runtime somando
-`transactions` do período/categoria.
+Autocontido — não exige nenhuma alteração em `transactions`/`accounts`/
+`categories`, só referencia a categoria via FK.
+`spent`/`remaining`/`percentageUsed`/`status` nunca são persistidos: são
+sempre recalculados em runtime (`BudgetService.toResponse`) somando
+`transactions` do tipo `EXPENSE` da mesma categoria no período
+`[from, to)` — mesmo padrão half-open do dashboard (seção 8.1).
+`status` (`SAFE < 80%`, `WARNING 80–100%`, `EXCEEDED > 100%`) também é
+derivado, nunca persistido; `percentageUsed` nunca é limitado a 100 — o
+valor real é sempre exposto, mesmo estourado.
 
-**`financial_goals`** (Fase 7) — metas financeiras:
+**Nota:** o rascunho original desta seção previa `category_id` opcional
+(orçamento geral do mês sem categoria) e a coluna `amount_limit`. A
+especificação detalhada da Fase 7 tornou categoria obrigatória (todo
+orçamento é por categoria, sempre `EXPENSE` — validado no Service) e o
+campo passou a se chamar `amount`; a implementação segue a especificação
+mais recente e detalhada, não o rascunho.
+
+**`financial_goals`** e **`goal_contributions`** (Fase 7, implementadas —
+migration `V4`) — metas financeiras com histórico de contribuições:
 
 ```sql
-CREATE TYPE goal_status AS ENUM ('ACTIVE', 'COMPLETED', 'ARCHIVED');
-
 CREATE TABLE financial_goals (
-    id                BIGSERIAL PRIMARY KEY,
-    user_id           BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    linked_account_id BIGINT REFERENCES accounts(id),  -- opcional: conta que acumula p/ a meta
-    name              VARCHAR(120) NOT NULL,
-    target_amount     NUMERIC(12,2) NOT NULL CHECK (target_amount > 0),
-    target_date       DATE,
-    status            goal_status NOT NULL DEFAULT 'ACTIVE',
-    created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    id             BIGSERIAL PRIMARY KEY,
+    user_id        BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name           VARCHAR(120) NOT NULL,
+    description    VARCHAR(500),
+    target_amount  NUMERIC(12,2) NOT NULL CHECK (target_amount > 0),
+    target_date    DATE,
+    status         VARCHAR(20) NOT NULL DEFAULT 'ACTIVE' CHECK (status IN ('ACTIVE', 'COMPLETED', 'CANCELLED')),
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE goal_contributions (
+    id         BIGSERIAL PRIMARY KEY,
+    goal_id    BIGINT NOT NULL REFERENCES financial_goals(id) ON DELETE CASCADE,
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    amount     NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    date       DATE NOT NULL,
+    note       VARCHAR(300),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
 
-Deliberadamente desacoplada: a meta *aponta* para uma conta opcional, a
-conta não sabe da meta. `current_amount` não é armazenado — é calculado a
-partir do saldo da conta vinculada (ou de transações filtradas por
-categoria/conta, a definir no detalhamento da Fase 7). Isso evita duplicar
-uma fonte de verdade que já existe em `transactions`/`accounts`.
+`current_amount`/`remaining_amount`/`progress_percentage` nunca são
+persistidos — são sempre `SUM(goal_contributions.amount)` e derivados
+disso (`GoalService.toResponse`), evitando um número "mágico" sem
+rastreabilidade. Nenhuma `Transaction` é criada por uma meta ou por uma
+contribuição — ambas são puramente planejamento/acompanhamento, a mesma
+separação de `recurring_transactions` em relação a `transactions`, mas
+sem sequer gerar linhas na tabela de lançamentos.
+
+**Status (`GoalService.recalculateStatus`)**: `ACTIVE`/`COMPLETED` são
+recalculados automaticamente a cada criação/remoção de contribuição —
+`SUM(contributions) >= targetAmount` vira `COMPLETED`, senão volta para
+`ACTIVE` (a mesma checagem cobre tanto "completar ao atingir o alvo"
+quanto "reverter para ACTIVE se uma contribuição for removida e o total
+cair abaixo do alvo", sem precisar de dois caminhos de código
+diferentes). `CANCELLED` é sempre uma ação manual do usuário
+(`PUT /api/goals/{id}`) e nunca é sobrescrita automaticamente por esse
+recálculo — uma meta cancelada não "reativa sozinha" só porque ainda tem
+contribuições registradas. O cliente nunca pode setar `status=COMPLETED`
+diretamente (rejeitado com 400): é sempre derivado.
+
+**Exclusão**: `DELETE` físico da meta remove suas `goal_contributions`
+em cascata (`ON DELETE CASCADE`) — diferente de
+`recurring_transactions`/`transactions` (que usa `SET NULL` para
+preservar histórico de lançamentos reais). A diferença é proposital:
+uma `goal_contribution` nunca foi um lançamento financeiro do sistema,
+é só o histórico interno de progresso daquela meta específica — sem
+sentido mantê-la órfã depois que a meta que ela media deixa de existir.
+
+**Nota:** o rascunho original desta seção previa um enum nativo do
+Postgres (`CREATE TYPE goal_status AS ENUM`), valores
+`ACTIVE`/`COMPLETED`/`ARCHIVED`, e progresso calculado a partir do saldo
+de uma `linked_account_id` opcional (ou de transações filtradas,
+"a definir na Fase 7"). A implementação segue, em vez disso: (1) o
+padrão real do projeto para enums, `VARCHAR + CHECK` (mesma decisão já
+aplicada em `recurring_transactions` na Fase 6, ver nota da seção
+anterior); (2) os valores `ACTIVE`/`COMPLETED`/`CANCELLED` e o modelo de
+`goal_contributions` explicitamente decididos na especificação detalhada
+da Fase 7 — que resolve exatamente a lacuna que o rascunho deixava em
+aberto ("a definir"), descartando a ideia de vincular a meta a uma conta.
 
 **Relatórios (Fase 8)**: não introduzem tabela nova no MVP — são queries de
 agregação sobre `transactions`/`categories`/`accounts`, no mesmo espírito
@@ -1104,7 +1163,7 @@ criá-la — decisão tomada com base na seção 13, não antecipada aqui.
 | **4** | Estrutura e design system do frontend | Vite + Tailwind + shadcn/ui, shell (sidebar/topbar), tema escuro, componentes base — sem integração real com API ainda (dados mockados). |
 | **5** | Integração completa frontend/API | Conecta as telas da Fase 4 aos endpoints das Fases 1–3: login/logout via cookie, CRUD de transações, dashboard real. |
 | **6** | Recorrências | `recurring_transactions` (migration `V3`), `RecurringTransactionScheduler`/`Processor` (`@Scheduled`, catch-up idempotente), colunas `transactions.recurring_transaction_id`/`recurrence_date`, UI de gestão de recorrências. Detalhado na seção 9.2.1. |
-| **7** | Orçamentos e metas | `budgets`, `financial_goals`, UI de acompanhamento (orçado x realizado, progresso de meta). |
+| **7** | Orçamentos e metas | `budgets`, `financial_goals`/`goal_contributions` (migration `V4`), UI de acompanhamento (orçado x realizado, progresso de meta). Detalhado na seção 9.2. |
 | **8** | Relatórios | Agregações adicionais, exportação (CSV/PDF), UI de relatórios. |
 | **9** | Testes, segurança, performance e acessibilidade | Cobertura de testes (unit/integration) consolidada, revisão de segurança (CSRF/auth/IDOR), medição de memória (seção 12.2) usada para fixar o `-Xmx` definitivo, auditoria de acessibilidade do frontend. |
 | **10** | Deploy e observabilidade | Deploy definitivo/hardening: Nginx + HTTPS + systemd em produção, logging estruturado, healthcheck, rotina de backup do database exclusivo. Reaproveita o que já foi validado no Checkpoint (pós-Fase 3) em vez de repetir a validação do zero. |
