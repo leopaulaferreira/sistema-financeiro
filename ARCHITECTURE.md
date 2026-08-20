@@ -528,34 +528,133 @@ Notas de modelagem:
 Desenhadas desde já para garantir que se encaixam sem atrito no modelo
 atual. Serão materializadas em migrações Flyway próprias, na fase indicada.
 
-**`recurring_transactions`** (Fase 6) — template gerador de transações:
+**`recurring_transactions`** (Fase 6, implementada — migration `V3`) — regra
+geradora de transações, nunca as substitui:
 
 ```sql
-CREATE TYPE recurrence_frequency AS ENUM ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY');
-
 CREATE TABLE recurring_transactions (
-    id                 BIGSERIAL PRIMARY KEY,
-    user_id            BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    account_id         BIGINT NOT NULL REFERENCES accounts(id),
-    category_id        BIGINT NOT NULL REFERENCES categories(id),
-    payment_method_id  BIGINT NOT NULL REFERENCES payment_methods(id),
-    description        VARCHAR(160) NOT NULL,
-    amount             NUMERIC(12,2) NOT NULL CHECK (amount > 0),
-    type               transaction_type NOT NULL,
-    frequency          recurrence_frequency NOT NULL,
-    start_date         DATE NOT NULL,
-    end_date           DATE,
-    next_occurrence_at DATE NOT NULL,
-    active             BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+    id                   BIGSERIAL PRIMARY KEY,
+    user_id              BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id           BIGINT NOT NULL REFERENCES accounts(id),
+    category_id          BIGINT NOT NULL REFERENCES categories(id),
+    payment_method_id    BIGINT NOT NULL REFERENCES payment_methods(id),
+    description          VARCHAR(160) NOT NULL,
+    amount               NUMERIC(12,2) NOT NULL CHECK (amount > 0),
+    type                 VARCHAR(20) NOT NULL CHECK (type IN ('INCOME', 'EXPENSE')),
+    frequency            VARCHAR(20) NOT NULL CHECK (frequency IN ('DAILY', 'WEEKLY', 'MONTHLY', 'YEARLY')),
+    start_date           DATE NOT NULL,
+    end_date             DATE,
+    next_execution_date  DATE NOT NULL,
+    last_execution_date  DATE,
+    active               BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (end_date IS NULL OR end_date >= start_date)
 );
 ```
 
-Cada disparo gera uma linha real em `transactions`, referenciando de volta
-via `transactions.recurring_transaction_id` (coluna adicionada nessa
-mesma migração da Fase 6). Isso preserva o princípio central do domínio
+**Nota:** o rascunho original desta seção (escrito antes da Fase 2) usava
+`CREATE TYPE ... AS ENUM` e `type transaction_type NOT NULL` como se
+existisse um enum nativo do Postgres para `transaction_type` — nunca
+existiu; a Fase 2 já havia decidido `VARCHAR + CHECK` para todos os tipos
+enumerados (seção 9.1/9.3.4), e este rascunho só não tinha sido atualizado.
+A implementação da Fase 6 segue o padrão real do projeto, não o rascunho.
+`next_occurrence_at` também foi renomeada para `next_execution_date`
+(mesmo campo, nome mais explícito) e `last_execution_date` foi adicionada —
+não usada em nenhuma regra de negócio (a fonte de verdade do agendamento é
+sempre `next_execution_date`), só para auditoria/depuração de catch-up.
+
+Cada disparo gera uma linha real em `transactions`, vinculada de volta via
+`transactions.recurring_transaction_id` + `transactions.recurrence_date`
+(colunas adicionadas na mesma migração `V3`). A dupla
+`(recurring_transaction_id, recurrence_date)` é `UNIQUE` — é a última
+linha de defesa contra uma ocorrência ser gerada duas vezes (ver "Fase 6 —
+recorrências" abaixo). Isso preserva o princípio central do domínio
 (seção 9.3): a recorrência é um *gerador*, a transação continua sendo o
 lançamento atômico.
+
+### 9.2.1 Fase 6 — recorrências (detalhamento)
+
+- **Semântica de `startDate`**: é sempre a primeira data de execução (não
+  "início da regra, com a primeira execução em um período posterior").
+  `nextExecutionDate` nasce igual a `startDate` na criação.
+- **Cálculo de datas (`RecurrenceDateCalculator`)**: `MONTHLY`/`YEARLY`
+  sempre ancoram no dia (e, para `YEARLY`, também no mês) de `startDate` —
+  nunca no dia da ocorrência anterior. Isso evita degradação cumulativa:
+  `31/01 → 28/02 → 31/03` (ancorado em 31), não `31/01 → 28/02 → 28/03`
+  (que aconteceria se março reusasse o dia já truncado de fevereiro).
+  Quando o dia âncora não existe no mês de destino, usa-se o último dia
+  válido desse mês — mesma regra para `31` em meses de 30 dias e para
+  `29/02` (`YEARLY`) em anos não bissextos, que cai em `28/02` e volta a
+  `29/02` no próximo ano bissexto. Por isso não existe uma coluna separada
+  de "dia âncora": o próprio `startDate` já cumpre esse papel — e é por
+  isso que editar `startDate` é bloqueado depois que a regra já gerou
+  alguma ocorrência (ver abaixo).
+- **Processador**: `RecurringTransactionScheduler` (`@Scheduled`, cron
+  configurável via `app.recurring-processing.cron`, default de hora em
+  hora — sem Kafka/RabbitMQ/Quartz, ver seção 3) aciona
+  `RecurringTransactionProcessor`, que varre regras `active=true` com
+  `next_execution_date <= hoje` (sem filtro de usuário — roda para todos)
+  e delega o processamento de cada regra a
+  `RecurringTransactionService.processDueOccurrences`, reaproveitando
+  `TransactionService.createFromRecurrence` (mesmas invariantes do CRUD
+  manual de `Transaction`) para não duplicar a regra de criação.
+- **Catch-up**: cada regra processada gera, em loop, uma `Transaction` por
+  ocorrência vencida (ex.: app desligada por 4 meses gera as 4 ocorrências
+  perdidas, não só a mais recente), limitado a 500 ocorrências por regra
+  por rodada — alto o bastante para catch-up realista (uma recorrência
+  diária parada por mais de um ano), baixo o bastante para nunca travar o
+  processador por causa de um dado inconsistente; se o limite for atingido,
+  a rodada seguinte continua de onde parou, sem perda.
+- **Idempotência**: duas camadas. (1) Lock pessimista
+  (`SELECT ... FOR UPDATE`, via `findByIdForUpdate`) antes de processar uma
+  regra, serializando duas execuções concorrentes da mesma regra — e
+  processado por regra em sua própria transação de banco (não um lote
+  inteiro), para não segurar o lock além do necessário. (2) A constraint
+  `UNIQUE(recurring_transaction_id, recurrence_date)` em `transactions`,
+  que rejeitaria um INSERT duplicado mesmo que a camada 1 falhasse por
+  algum motivo — a última linha de defesa é sempre o banco, não o Java.
+- **Consistência transacional**: gerar a `Transaction` e avançar
+  `next_execution_date` (e `last_execution_date`) acontecem na mesma
+  transação de banco (`@Transactional` em
+  `RecurringTransactionService.processDueOccurrences`). Se o processo
+  morrer entre os dois passos, a transação Postgres nunca comita — nem a
+  `Transaction` nem o avanço de data existem — e a próxima rodada
+  reprocessa a mesma ocorrência do zero, sem duplicidade nem perda.
+- **Edição**: alterar campos de conteúdo (descrição, valor, conta,
+  categoria, método, frequência, `endDate`) nunca reescreve `Transaction`s
+  já geradas — o vínculo é histórico, não uma referência viva. `type` não é
+  editável (troca de receita↔despesa é uma nova recorrência).
+  `next_execution_date` só é recalculada quando semanticamente necessário:
+  sem nenhuma execução ainda, é sempre `startDate` (novo ou antigo); com
+  execuções, só se a frequência mudar (ancorando na última execução real,
+  não em `startDate`) — editar só a descrição não mexe no calendário.
+  `startDate` só pode ser alterada enquanto a regra nunca gerou nenhuma
+  ocorrência.
+- **Pausar/reativar**: reaproveita o mesmo PUT de edição (`active`), sem
+  endpoint `PATCH` dedicado — mesmo padrão já usado por `accounts`. Pausar
+  (`active=false`) só impede novas gerações; o histórico não muda. Ao
+  reativar, se `next_execution_date` ficou no passado durante a pausa, ela
+  é reposicionada para a próxima ocorrência válida a partir de hoje (nunca
+  gera de uma vez todas as ocorrências perdidas durante a pausa) — pausar
+  uma assinatura por 6 meses e reativar não deve gerar 6 despesas
+  retroativas.
+- **Exclusão**: `DELETE` físico da regra. `transactions.recurring_transaction_id`
+  é `ON DELETE SET NULL` — as `Transaction`s já geradas nunca são apagadas
+  junto, só perdem o vínculo "de volta" para uma regra que não existe mais
+  (mantendo `recurrence_date` como dado histórico). Diferente de
+  account/category/payment-method, excluir uma recorrência nunca é
+  bloqueado com 409 — não há "uso corrente" que a exclusão comprometa,
+  apenas histórico que sobrevive por conta própria.
+- **`account`/`category`/`payment_method` referenciados por uma
+  recorrência**: excluí-los é bloqueado com 409 (mesmo padrão de
+  `transactions`), porque a FK correspondente em `recurring_transactions`
+  não tem `ON DELETE` automático — sem esse bloqueio explícito no Service,
+  a tentativa quebraria com um erro 500 de violação de constraint em vez
+  de uma mensagem amigável.
+- **Dashboard**: continua consultando só `transactions` — nenhuma
+  agregação passa a somar `recurring_transactions`. Previsão e realizado
+  nunca se misturam num mesmo número.
 
 **`budgets`** (Fase 7) — orçamento mensal, opcionalmente por categoria:
 
@@ -794,11 +893,23 @@ Dashboard
   GET    /api/dashboard/accounts-balance
 ```
 
-Paginação: offset-based (`page`, `size`).
+Recurring transactions (Fase 6, implementada)
+  GET    /api/recurring-transactions?type=&active=&frequency=
+  POST   /api/recurring-transactions
+  GET    /api/recurring-transactions/{id}
+  PUT    /api/recurring-transactions/{id}
+         (substitui o registro inteiro, incluindo `active` — reaproveitado
+         para pausar/reativar, sem endpoint PATCH dedicado, mesmo padrão de
+         `accounts`)
+  DELETE /api/recurring-transactions/{id}
 
-Endpoints das Fases 6–8 (`/api/recurring-transactions`, `/api/budgets`,
-`/api/goals`, `/api/reports/*`) seguem o mesmo padrão REST e serão
-detalhados quando a fase correspondente começar.
+Paginação: offset-based (`page`, `size`) — `recurring-transactions` não
+pagina (lista simples, mesmo padrão de `accounts`/`categories`/
+`payment-methods`, volume baixo por usuário).
+
+Endpoints das Fases 7–8 (`/api/budgets`, `/api/goals`, `/api/reports/*`)
+seguem o mesmo padrão REST e serão detalhados quando a fase correspondente
+começar.
 
 ## 12. Estratégia de memória do Spring Boot
 
@@ -992,7 +1103,7 @@ criá-la — decisão tomada com base na seção 13, não antecipada aqui.
 | **Checkpoint** (após a Fase 3, antes da Fase 4) | Deploy mínimo de validação | Sobe o backend (Fases 1–3) na VM real, mesmo sem frontend completo. Objetivo: validar integração com PostgreSQL real (seção 13, já com a instância decidida), medir RSS real da JVM sob a carga do checklist da seção 12.2 e ajustar o `-Xmx` definitivo, medir consumo real do Postgres escolhido, testar Nginx/HTTPS de ponta a ponta, e confirmar que a aplicação cabe confortavelmente na VM **antes** de investir em frontend e funcionalidades futuras. Não é o deploy definitivo (esse é a Fase 10) — é uma validação de ambiente antecipada para reduzir risco. |
 | **4** | Estrutura e design system do frontend | Vite + Tailwind + shadcn/ui, shell (sidebar/topbar), tema escuro, componentes base — sem integração real com API ainda (dados mockados). |
 | **5** | Integração completa frontend/API | Conecta as telas da Fase 4 aos endpoints das Fases 1–3: login/logout via cookie, CRUD de transações, dashboard real. |
-| **6** | Recorrências | `recurring_transactions`, job/mecanismo de geração de ocorrências, coluna `transactions.recurring_transaction_id`, UI correspondente. |
+| **6** | Recorrências | `recurring_transactions` (migration `V3`), `RecurringTransactionScheduler`/`Processor` (`@Scheduled`, catch-up idempotente), colunas `transactions.recurring_transaction_id`/`recurrence_date`, UI de gestão de recorrências. Detalhado na seção 9.2.1. |
 | **7** | Orçamentos e metas | `budgets`, `financial_goals`, UI de acompanhamento (orçado x realizado, progresso de meta). |
 | **8** | Relatórios | Agregações adicionais, exportação (CSV/PDF), UI de relatórios. |
 | **9** | Testes, segurança, performance e acessibilidade | Cobertura de testes (unit/integration) consolidada, revisão de segurança (CSRF/auth/IDOR), medição de memória (seção 12.2) usada para fixar o `-Xmx` definitivo, auditoria de acessibilidade do frontend. |
