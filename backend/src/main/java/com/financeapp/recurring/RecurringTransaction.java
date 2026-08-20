@@ -1,10 +1,9 @@
-package com.financeapp.transaction;
+package com.financeapp.recurring;
 
 import com.financeapp.account.Account;
 import com.financeapp.category.Category;
 import com.financeapp.common.TransactionType;
 import com.financeapp.paymentmethod.PaymentMethod;
-import com.financeapp.recurring.RecurringTransaction;
 import com.financeapp.user.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -24,14 +23,15 @@ import java.time.Instant;
 import java.time.LocalDate;
 
 /**
- * Lançamento financeiro atômico do sistema (ARCHITECTURE.md §9.3.1) — toda
- * feature futura que precise de múltiplos lançamentos relacionados
- * (recorrências, parcelas de cartão) gera múltiplas linhas desta entidade,
- * nunca um valor único a ser "explodido" depois.
+ * Regra geradora de {@link com.financeapp.transaction.Transaction} — NUNCA
+ * substitui Transaction, que continua o lançamento atômico do sistema
+ * (ARCHITECTURE.md §9.3.1). {@code startDate} é sempre a primeira data de
+ * execução (não "início da regra" com primeira execução posterior): ao criar
+ * uma recorrência, {@code nextExecutionDate} nasce igual a {@code startDate}.
  */
 @Entity
-@Table(name = "transactions")
-public class Transaction {
+@Table(name = "recurring_transactions")
+public class RecurringTransaction {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -63,27 +63,24 @@ public class Transaction {
     @Column(nullable = false, length = 20)
     private TransactionType type;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private RecurrenceFrequency frequency;
+
+    @Column(name = "start_date", nullable = false)
+    private LocalDate startDate;
+
+    @Column(name = "end_date")
+    private LocalDate endDate;
+
+    @Column(name = "next_execution_date", nullable = false)
+    private LocalDate nextExecutionDate;
+
+    @Column(name = "last_execution_date")
+    private LocalDate lastExecutionDate;
+
     @Column(nullable = false)
-    private LocalDate date;
-
-    @Column(length = 500)
-    private String notes;
-
-    /**
-     * Preenchidos apenas quando esta Transaction foi gerada por uma
-     * recorrência (Fase 6) — ambos {@code null} para toda transação criada
-     * manualmente. {@code recurrenceDate} é a data da ocorrência específica
-     * (não necessariamente igual a {@code date}, embora hoje sempre
-     * coincidam); a dupla (recurringTransaction, recurrenceDate) é única no
-     * banco (migration V3) — última linha de defesa contra geração
-     * duplicada da mesma ocorrência.
-     */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "recurring_transaction_id")
-    private RecurringTransaction recurringTransaction;
-
-    @Column(name = "recurrence_date")
-    private LocalDate recurrenceDate;
+    private boolean active;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -91,11 +88,12 @@ public class Transaction {
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt;
 
-    protected Transaction() {
+    protected RecurringTransaction() {
     }
 
-    public Transaction(User user, Account account, Category category, PaymentMethod paymentMethod,
-                        String description, BigDecimal amount, TransactionType type, LocalDate date, String notes) {
+    public RecurringTransaction(User user, Account account, Category category, PaymentMethod paymentMethod,
+                                 String description, BigDecimal amount, TransactionType type,
+                                 RecurrenceFrequency frequency, LocalDate startDate, LocalDate endDate) {
         this.user = user;
         this.account = account;
         this.category = category;
@@ -103,29 +101,50 @@ public class Transaction {
         this.description = description;
         this.amount = amount;
         this.type = type;
-        this.date = date;
-        this.notes = notes;
+        this.frequency = frequency;
+        this.startDate = startDate;
+        this.endDate = endDate;
+        this.nextExecutionDate = startDate;
+        this.active = true;
         Instant now = Instant.now();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
+    /**
+     * Atualiza os campos "de conteúdo" da regra. Não mexe em
+     * {@code nextExecutionDate}/{@code active} — isso é decidido pelo
+     * Service, que sabe se a mudança de frequência/startDate exige
+     * recálculo (ARCHITECTURE.md, seção de edição da Fase 6).
+     */
     public void update(Account account, Category category, PaymentMethod paymentMethod, String description,
-                        BigDecimal amount, TransactionType type, LocalDate date, String notes) {
+                        BigDecimal amount, RecurrenceFrequency frequency, LocalDate startDate, LocalDate endDate) {
         this.account = account;
         this.category = category;
         this.paymentMethod = paymentMethod;
         this.description = description;
         this.amount = amount;
-        this.type = type;
-        this.date = date;
-        this.notes = notes;
+        this.frequency = frequency;
+        this.startDate = startDate;
+        this.endDate = endDate;
     }
 
-    /** Chamado apenas pelo processador de recorrências (Fase 6), nunca pelo fluxo manual de criação. */
-    public void linkToRecurrence(RecurringTransaction recurringTransaction, LocalDate recurrenceDate) {
-        this.recurringTransaction = recurringTransaction;
-        this.recurrenceDate = recurrenceDate;
+    public void rescheduleNextExecution(LocalDate nextExecutionDate) {
+        this.nextExecutionDate = nextExecutionDate;
+    }
+
+    /** Chamado pelo processador ao gerar uma ocorrência: avança o ponteiro e registra a última execução real. */
+    public void recordExecution(LocalDate occurredOn, LocalDate nextExecutionDate) {
+        this.lastExecutionDate = occurredOn;
+        this.nextExecutionDate = nextExecutionDate;
+    }
+
+    public void deactivate() {
+        this.active = false;
+    }
+
+    public void activate() {
+        this.active = true;
     }
 
     @PreUpdate
@@ -165,20 +184,28 @@ public class Transaction {
         return type;
     }
 
-    public LocalDate getDate() {
-        return date;
+    public RecurrenceFrequency getFrequency() {
+        return frequency;
     }
 
-    public String getNotes() {
-        return notes;
+    public LocalDate getStartDate() {
+        return startDate;
     }
 
-    public RecurringTransaction getRecurringTransaction() {
-        return recurringTransaction;
+    public LocalDate getEndDate() {
+        return endDate;
     }
 
-    public LocalDate getRecurrenceDate() {
-        return recurrenceDate;
+    public LocalDate getNextExecutionDate() {
+        return nextExecutionDate;
+    }
+
+    public LocalDate getLastExecutionDate() {
+        return lastExecutionDate;
+    }
+
+    public boolean isActive() {
+        return active;
     }
 
     public Instant getCreatedAt() {

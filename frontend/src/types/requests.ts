@@ -1,4 +1,4 @@
-import type { AccountType, PaymentMethodType, TransactionType } from './finance'
+import type { AccountType, PaymentMethodType, RecurrenceFrequency, TransactionType } from './finance'
 
 /** Espelha com.financeapp.auth.dto.RegisterRequest. */
 export interface RegisterRequest {
@@ -59,4 +59,36 @@ export interface TransactionSearchParams {
   accountId?: number
   page?: number
   size?: number
+}
+
+/** Espelha com.financeapp.recurring.dto.RecurringTransactionCreateRequest. nextExecutionDate nunca é enviada — o backend sempre calcula. */
+export interface RecurringTransactionCreateRequest {
+  description: string
+  amount: number
+  type: TransactionType
+  categoryId: number
+  accountId: number
+  paymentMethodId: number
+  frequency: RecurrenceFrequency
+  startDate: string
+  endDate?: string | null
+}
+
+/** Espelha com.financeapp.recurring.dto.RecurringTransactionUpdateRequest. PUT substitui o registro inteiro, incluindo active (reaproveitado para pausar/reativar). */
+export interface RecurringTransactionUpdateRequest {
+  description: string
+  amount: number
+  categoryId: number
+  accountId: number
+  paymentMethodId: number
+  frequency: RecurrenceFrequency
+  startDate: string
+  endDate?: string | null
+  active: boolean
+}
+
+export interface RecurringTransactionSearchParams {
+  type?: TransactionType
+  active?: boolean
+  frequency?: RecurrenceFrequency
 }

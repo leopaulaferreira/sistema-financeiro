@@ -7,6 +7,7 @@ import { DashboardPage } from '@/pages/dashboard-page'
 import { TransactionsPage } from '@/pages/transactions-page'
 import { AccountsPage } from '@/pages/accounts-page'
 import { CategoriesPage } from '@/pages/categories-page'
+import { RecurringPage } from '@/pages/recurring-page'
 import { BudgetsPage } from '@/pages/budgets-page'
 import { GoalsPage } from '@/pages/goals-page'
 import { ReportsPage } from '@/pages/reports-page'
@@ -31,6 +32,7 @@ export function AppRoutes() {
           <Route path={paths.transactions} element={<TransactionsPage />} />
           <Route path={paths.accounts} element={<AccountsPage />} />
           <Route path={paths.categories} element={<CategoriesPage />} />
+          <Route path={paths.recurring} element={<RecurringPage />} />
           <Route path={paths.budgets} element={<BudgetsPage />} />
           <Route path={paths.goals} element={<GoalsPage />} />
           <Route path={paths.reports} element={<ReportsPage />} />
