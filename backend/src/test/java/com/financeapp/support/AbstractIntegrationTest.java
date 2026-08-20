@@ -12,6 +12,8 @@ import com.financeapp.common.TransactionType;
 import com.financeapp.paymentmethod.PaymentMethodType;
 import com.financeapp.paymentmethod.dto.PaymentMethodRequest;
 import com.financeapp.paymentmethod.dto.PaymentMethodResponse;
+import com.financeapp.recurring.dto.RecurringTransactionCreateRequest;
+import com.financeapp.recurring.dto.RecurringTransactionResponse;
 import com.financeapp.user.UserRepository;
 import jakarta.servlet.http.Cookie;
 import org.junit.jupiter.api.AfterEach;
@@ -133,5 +135,15 @@ public abstract class AbstractIntegrationTest {
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsByteArray(), PaymentMethodResponse.class);
+    }
+
+    protected RecurringTransactionResponse createRecurringTransaction(Session session, RecurringTransactionCreateRequest request)
+            throws Exception {
+        MvcResult result = mockMvc.perform(authed(post("/api/recurring-transactions"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readValue(result.getResponse().getContentAsByteArray(), RecurringTransactionResponse.class);
     }
 }
