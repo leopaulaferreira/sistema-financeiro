@@ -27,6 +27,10 @@ app:
     secure: ${COOKIE_SECURE:true}
   cors:
     allowed-origin: ${CORS_ALLOWED_ORIGIN:http://localhost:5173}
+  recurring-processing:
+    # Fase 6: expressão cron de 6 campos (Spring), default de hora em hora —
+    # não precisa ser mais frequente, ver ARCHITECTURE.md.
+    cron: ${RECURRING_PROCESSING_CRON:0 0 * * * *}
 
 logging:
   level:
