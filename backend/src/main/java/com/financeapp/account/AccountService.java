@@ -5,6 +5,7 @@ import com.financeapp.account.dto.AccountResponse;
 import com.financeapp.account.dto.AccountUpdateRequest;
 import com.financeapp.common.exception.ResourceInUseException;
 import com.financeapp.common.exception.ResourceNotFoundException;
+import com.financeapp.recurring.RecurringTransactionRepository;
 import com.financeapp.transaction.TransactionRepository;
 import com.financeapp.user.User;
 import com.financeapp.user.UserRepository;
@@ -19,13 +20,16 @@ public class AccountService {
     private final AccountRepository accountRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final RecurringTransactionRepository recurringTransactionRepository;
 
     public AccountService(AccountRepository accountRepository,
                            UserRepository userRepository,
-                           TransactionRepository transactionRepository) {
+                           TransactionRepository transactionRepository,
+                           RecurringTransactionRepository recurringTransactionRepository) {
         this.accountRepository = accountRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.recurringTransactionRepository = recurringTransactionRepository;
     }
 
     @Transactional
@@ -58,6 +62,9 @@ public class AccountService {
         Account account = findOwned(userId, id);
         if (transactionRepository.existsByAccountId(account.getId())) {
             throw new ResourceInUseException("Não é possível excluir uma conta com transações vinculadas");
+        }
+        if (recurringTransactionRepository.existsByAccountId(account.getId())) {
+            throw new ResourceInUseException("Não é possível excluir uma conta com recorrências vinculadas");
         }
         accountRepository.delete(account);
     }

@@ -5,6 +5,7 @@ import com.financeapp.category.dto.CategoryResponse;
 import com.financeapp.common.TransactionType;
 import com.financeapp.common.exception.ResourceInUseException;
 import com.financeapp.common.exception.ResourceNotFoundException;
+import com.financeapp.recurring.RecurringTransactionRepository;
 import com.financeapp.transaction.TransactionRepository;
 import com.financeapp.user.User;
 import com.financeapp.user.UserRepository;
@@ -19,13 +20,16 @@ public class CategoryService {
     private final CategoryRepository categoryRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final RecurringTransactionRepository recurringTransactionRepository;
 
     public CategoryService(CategoryRepository categoryRepository,
                             UserRepository userRepository,
-                            TransactionRepository transactionRepository) {
+                            TransactionRepository transactionRepository,
+                            RecurringTransactionRepository recurringTransactionRepository) {
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.recurringTransactionRepository = recurringTransactionRepository;
     }
 
     @Transactional
@@ -59,6 +63,9 @@ public class CategoryService {
         Category category = findOwned(userId, id);
         if (transactionRepository.existsByCategoryId(category.getId())) {
             throw new ResourceInUseException("Não é possível excluir uma categoria com transações vinculadas");
+        }
+        if (recurringTransactionRepository.existsByCategoryId(category.getId())) {
+            throw new ResourceInUseException("Não é possível excluir uma categoria com recorrências vinculadas");
         }
         categoryRepository.delete(category);
     }

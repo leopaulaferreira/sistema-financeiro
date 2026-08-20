@@ -4,6 +4,7 @@ import com.financeapp.common.exception.ResourceInUseException;
 import com.financeapp.common.exception.ResourceNotFoundException;
 import com.financeapp.paymentmethod.dto.PaymentMethodRequest;
 import com.financeapp.paymentmethod.dto.PaymentMethodResponse;
+import com.financeapp.recurring.RecurringTransactionRepository;
 import com.financeapp.transaction.TransactionRepository;
 import com.financeapp.user.User;
 import com.financeapp.user.UserRepository;
@@ -18,13 +19,16 @@ public class PaymentMethodService {
     private final PaymentMethodRepository paymentMethodRepository;
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
+    private final RecurringTransactionRepository recurringTransactionRepository;
 
     public PaymentMethodService(PaymentMethodRepository paymentMethodRepository,
                                  UserRepository userRepository,
-                                 TransactionRepository transactionRepository) {
+                                 TransactionRepository transactionRepository,
+                                 RecurringTransactionRepository recurringTransactionRepository) {
         this.paymentMethodRepository = paymentMethodRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
+        this.recurringTransactionRepository = recurringTransactionRepository;
     }
 
     @Transactional
@@ -57,6 +61,9 @@ public class PaymentMethodService {
         PaymentMethod paymentMethod = findOwned(userId, id);
         if (transactionRepository.existsByPaymentMethodId(paymentMethod.getId())) {
             throw new ResourceInUseException("Não é possível excluir um método de pagamento com transações vinculadas");
+        }
+        if (recurringTransactionRepository.existsByPaymentMethodId(paymentMethod.getId())) {
+            throw new ResourceInUseException("Não é possível excluir um método de pagamento com recorrências vinculadas");
         }
         paymentMethodRepository.delete(paymentMethod);
     }
