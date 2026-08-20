@@ -9,6 +9,7 @@ import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
@@ -97,4 +98,20 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             group by t.account.id
             """)
     List<AccountTotals> sumTotalsByAccountExcludingCreditCard(@Param("userId") Long userId);
+
+    /**
+     * Gasto realizado de uma categoria no período [from, to) — usado por
+     * {@code BudgetService} para calcular {@code spent} sempre por
+     * agregação sobre transactions, nunca persistido (ARCHITECTURE.md
+     * §9.2, Fase 7). {@code null} quando não há nenhuma despesa no
+     * período, normalizado para {@link java.math.BigDecimal#ZERO} no
+     * Service.
+     */
+    @Query("""
+            select sum(t.amount) from Transaction t
+            where t.user.id = :userId and t.type = com.financeapp.common.TransactionType.EXPENSE
+              and t.category.id = :categoryId and t.date >= :from and t.date < :to
+            """)
+    BigDecimal sumExpenseForCategoryAndPeriod(@Param("userId") Long userId, @Param("categoryId") Long categoryId,
+                                               @Param("from") LocalDate from, @Param("to") LocalDate to);
 }
