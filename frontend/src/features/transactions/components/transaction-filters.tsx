@@ -1,6 +1,6 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { mockCategories } from '@/mocks/categories'
-import { mockAccounts } from '@/mocks/accounts'
+import { useCategoriesQuery } from '@/features/categories/hooks/use-categories'
+import { useAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import type { TransactionFiltersState } from './transaction-filters.types'
 
 interface TransactionFiltersProps {
@@ -9,6 +9,9 @@ interface TransactionFiltersProps {
 }
 
 export function TransactionFilters({ value, onChange }: TransactionFiltersProps) {
+  const { data: categories } = useCategoriesQuery()
+  const { data: accounts } = useAccountsQuery()
+
   return (
     <div className="flex flex-wrap gap-3">
       <Select value={value.period} onValueChange={(period: TransactionFiltersState['period']) => onChange({ ...value, period })}>
@@ -17,8 +20,8 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALL">Todo o período</SelectItem>
-          <SelectItem value="2026-08">Agosto/2026</SelectItem>
-          <SelectItem value="2026-07">Julho/2026</SelectItem>
+          <SelectItem value="CURRENT">Este mês</SelectItem>
+          <SelectItem value="PREVIOUS">Mês passado</SelectItem>
         </SelectContent>
       </Select>
 
@@ -39,8 +42,8 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALL">Todas as categorias</SelectItem>
-          {mockCategories.map((c) => (
-            <SelectItem key={c.id} value={c.id}>
+          {categories?.map((c) => (
+            <SelectItem key={c.id} value={String(c.id)}>
               {c.name}
             </SelectItem>
           ))}
@@ -53,8 +56,8 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
         </SelectTrigger>
         <SelectContent>
           <SelectItem value="ALL">Todas as contas</SelectItem>
-          {mockAccounts.map((a) => (
-            <SelectItem key={a.id} value={a.id}>
+          {accounts?.map((a) => (
+            <SelectItem key={a.id} value={String(a.id)}>
               {a.name}
             </SelectItem>
           ))}

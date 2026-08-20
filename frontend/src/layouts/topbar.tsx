@@ -5,6 +5,8 @@ import { Input } from '@/components/ui/input'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { SidebarContent } from './sidebar'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { useAuth } from '@/features/auth/auth-context'
+import { initials } from '@/lib/format'
 
 interface TopbarProps {
   collapsed: boolean
@@ -14,6 +16,7 @@ interface TopbarProps {
 
 export function Topbar({ collapsed, onToggleCollapsed, title }: TopbarProps) {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { user } = useAuth()
 
   return (
     <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background/95 px-4 backdrop-blur supports-backdrop-filter:bg-background/80 sm:px-6">
@@ -59,7 +62,9 @@ export function Topbar({ collapsed, onToggleCollapsed, title }: TopbarProps) {
           <Bell className="size-[18px]" />
         </Button>
         <Avatar className="size-8">
-          <AvatarFallback className="bg-accent-primary/20 text-xs font-medium text-accent-primary">LP</AvatarFallback>
+          <AvatarFallback className="bg-accent-primary/20 text-xs font-medium text-accent-primary">
+            {initials(user?.name ?? '?')}
+          </AvatarFallback>
         </Avatar>
       </div>
     </header>

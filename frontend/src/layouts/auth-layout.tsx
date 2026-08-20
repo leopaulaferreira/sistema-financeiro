@@ -1,9 +1,10 @@
 import { Outlet } from 'react-router-dom'
 import { Wallet2 } from 'lucide-react'
+import { Footer } from '@/components/common/footer'
 
 export function AuthLayout() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4 py-10">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
           <div className="flex size-11 items-center justify-center rounded-xl bg-accent-primary/15 text-accent-primary">
@@ -16,6 +17,8 @@ export function AuthLayout() {
           <Outlet />
         </div>
       </div>
+
+      <Footer />
     </div>
   )
 }

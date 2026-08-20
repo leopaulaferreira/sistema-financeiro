@@ -1,13 +1,17 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { paths } from '@/routes/paths'
+import { useAuth } from '@/features/auth/auth-context'
+import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
 
 export function RegisterPage() {
   const navigate = useNavigate()
+  const { register } = useAuth()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -23,7 +27,15 @@ export function RegisterPage() {
     }
     setError('')
     setSubmitting(true)
-    setTimeout(() => navigate(paths.dashboard), 500)
+    register({ name, email, password })
+      .then(() => {
+        toast.success('Conta criada com sucesso.', { description: 'Faça login para continuar.' })
+        navigate(paths.login)
+      })
+      .catch((err: unknown) => {
+        setError(err instanceof ApiClientError && (err.status === 400 || err.status === 409) ? err.message : friendlyErrorMessage(err))
+      })
+      .finally(() => setSubmitting(false))
   }
 
   return (

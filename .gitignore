@@ -20,6 +20,9 @@ frontend/dist/
 .env
 .env.*
 !.env.example
+# Frontend: VITE_API_URL de dev é só http://localhost:8080, não é segredo —
+# Vite exige esse nome exato de arquivo para carregar automaticamente.
+!frontend/.env.development
 
 # Testcontainers
 .testcontainers.properties
