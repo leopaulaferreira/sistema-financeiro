@@ -18,6 +18,8 @@ import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * O progresso de uma meta nunca é persistido — é sempre
@@ -76,8 +78,19 @@ public class GoalService {
 
     @Transactional(readOnly = true)
     public List<FinancialGoalResponse> list(Long userId, GoalStatus status) {
-        return goalRepository.findAllOrdered(userId, status).stream()
-                .map(this::toResponse)
+        List<FinancialGoal> goals = goalRepository.findAllOrdered(userId, status);
+        if (goals.isEmpty()) {
+            return List.of();
+        }
+
+        // Uma única query agrupada para o progresso de todas as metas da lista,
+        // em vez de uma por meta (Fase 9: corrige N+1 detectado na auditoria).
+        List<Long> goalIds = goals.stream().map(FinancialGoal::getId).toList();
+        Map<Long, BigDecimal> currentByGoal = contributionRepository.sumAmountByGoalIds(goalIds).stream()
+                .collect(Collectors.toMap(GoalAmount::goalId, GoalAmount::amount));
+
+        return goals.stream()
+                .map(goal -> toResponse(goal, currentByGoal.getOrDefault(goal.getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
@@ -137,7 +150,10 @@ public class GoalService {
     }
 
     private FinancialGoalResponse toResponse(FinancialGoal goal) {
-        BigDecimal current = currentAmount(goal.getId());
+        return toResponse(goal, currentAmount(goal.getId()));
+    }
+
+    private FinancialGoalResponse toResponse(FinancialGoal goal, BigDecimal current) {
         BigDecimal remaining = goal.getTargetAmount().subtract(current);
         BigDecimal progressPercentage = percentageOf(current, goal.getTargetAmount());
         Long daysRemaining = goal.getTargetDate() == null
