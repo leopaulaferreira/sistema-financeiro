@@ -164,3 +164,62 @@ export interface GoalContribution {
   note: string | null
   createdAt: string
 }
+
+export type ReportGranularity = 'DAY' | 'MONTH'
+
+/** Espelha com.financeapp.report.dto.FinancialSummaryResponse. */
+export interface FinancialSummary {
+  totalIncome: number
+  totalExpenses: number
+  netResult: number
+  transactionCount: number
+  averageIncome: number
+  averageExpense: number
+}
+
+/** Espelha com.financeapp.report.dto.IncomeExpenseSeriesPointResponse. `period` é "yyyy-MM-dd" (DAY) ou "yyyy-MM" (MONTH). */
+export interface IncomeExpenseSeriesPoint {
+  period: string
+  income: number
+  expense: number
+}
+
+/** Espelha com.financeapp.report.dto.CategoryReportResponse — reaproveitado para despesas e receitas por categoria. */
+export interface CategoryReport {
+  categoryId: number
+  categoryName: string
+  amount: number
+  percentage: number
+}
+
+/** Espelha com.financeapp.report.dto.AccountFlowResponse. `netFlow` é do período — não é o saldo atual da conta. */
+export interface AccountFlow {
+  accountId: number
+  accountName: string
+  income: number
+  expense: number
+  netFlow: number
+}
+
+/** Espelha com.financeapp.report.dto.BalancePointResponse. Mesma regra de disponibilidade do dashboard (exclui CREDIT_CARD). */
+export interface BalancePoint {
+  date: string
+  balance: number
+}
+
+/** Espelha com.financeapp.report.dto.MonthlyComparisonResponse. `month` no formato "yyyy-MM". */
+export interface MonthlyComparison {
+  month: string
+  income: number
+  expense: number
+  netResult: number
+}
+
+/** Espelha com.financeapp.report.dto.PaymentMethodReportResponse. */
+export interface PaymentMethodReport {
+  paymentMethodId: number
+  paymentMethodName: string
+  amount: number
+  percentage: number
+  transactionCount: number
+}
