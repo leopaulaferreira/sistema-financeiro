@@ -1,4 +1,4 @@
-import type { AccountType, GoalStatus, PaymentMethodType, RecurrenceFrequency, TransactionType } from './finance'
+import type { AccountType, GoalStatus, PaymentMethodType, RecurrenceFrequency, ReportGranularity, TransactionType } from './finance'
 
 /** Espelha com.financeapp.auth.dto.RegisterRequest. */
 export interface RegisterRequest {
@@ -135,4 +135,24 @@ export interface GoalContributionCreateRequest {
   amount: number
   date: string
   note?: string | null
+}
+
+/** Período usado pela maioria dos endpoints de /api/reports — from inclusivo, to exclusivo ([from, to)). */
+export interface ReportPeriod {
+  from: string
+  to: string
+}
+
+export interface IncomeExpenseSeriesParams extends ReportPeriod {
+  granularity?: ReportGranularity
+}
+
+export interface TopTransactionsParams extends ReportPeriod {
+  limit?: number
+}
+
+export interface ReportExportParams extends ReportPeriod {
+  type?: TransactionType
+  categoryId?: number
+  accountId?: number
 }

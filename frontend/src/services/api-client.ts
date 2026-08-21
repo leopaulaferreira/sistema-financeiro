@@ -144,10 +144,33 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   return handleResponse<T>(res)
 }
 
+/**
+ * Baixa um arquivo (ex.: CSV de relatórios) em vez de fazer parse JSON da
+ * resposta — reaproveita o mesmo fetch com cookies/CSRF e a mesma
+ * estratégia de refresh de {@link request}, só troca o parsing final.
+ */
+async function requestBlob(path: string, params?: QueryParams): Promise<Blob> {
+  let res = await performRequest(path, { method: 'GET', params })
+
+  if (res.status === 401) {
+    const refreshed = await ensureRefreshed()
+    if (!refreshed) {
+      unauthorizedHandler?.()
+      throw await toApiClientError(res)
+    }
+    res = await performRequest(path, { method: 'GET', params })
+    if (res.status === 401) unauthorizedHandler?.()
+  }
+
+  if (!res.ok) throw await toApiClientError(res)
+  return res.blob()
+}
+
 export const apiClient = {
   get: <T>(path: string, params?: QueryParams) => request<T>(path, { method: 'GET', params }),
   post: <T>(path: string, body?: unknown, options?: Pick<RequestOptions, 'skipAuthRetry'>) =>
     request<T>(path, { method: 'POST', body, ...options }),
   put: <T>(path: string, body?: unknown) => request<T>(path, { method: 'PUT', body }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  getBlob: (path: string, params?: QueryParams) => requestBlob(path, params),
 }

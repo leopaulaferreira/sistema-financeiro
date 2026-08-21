@@ -757,12 +757,83 @@ anterior); (2) os valores `ACTIVE`/`COMPLETED`/`CANCELLED` e o modelo de
 da Fase 7 — que resolve exatamente a lacuna que o rascunho deixava em
 aberto ("a definir"), descartando a ideia de vincular a meta a uma conta.
 
-**Relatórios (Fase 8)**: não introduzem tabela nova no MVP — são queries de
-agregação sobre `transactions`/`categories`/`accounts`, no mesmo espírito
-do dashboard (seção 8), com exportação (CSV/PDF) gerada sob demanda. Uma
-tabela `report_exports` (histórico de exportações) só seria adicionada se
-no futuro quisermos persistir relatórios gerados — não é uma dependência
-do modelo atual.
+**Relatórios (Fase 8, implementada — sem migration de tabela, só um
+índice novo em `transactions`, `V5`)**: confirma o rascunho acima — nenhuma
+tabela nova, nenhuma fonte de verdade além de `transactions`. Detalhamento
+completo na seção 9.2.2.
+
+### 9.2.2 Fase 8 — relatórios (detalhamento)
+
+Módulo `report/` (`ReportService`/`ReportController`), sem entidade
+própria — todos os 10 relatórios + export CSV agregam sobre
+`transactions` via SQL (`SUM`/`AVG`/`COUNT`/`GROUP BY`), reaproveitando ao
+máximo as queries e DTOs de projeção já existentes (`PeriodTotals`,
+`CategoryAmount`, `DailyTotals`, `AccountTotals` do dashboard/budget) —
+só duas projeções novas, `SummaryTotals` e `PaymentMethodAmount`.
+`budgets`/`goals`/`recurring_transactions` não entram em nenhum cálculo:
+planejamento nunca vira "realizado".
+
+**Semântica de período**: `[from, to)` — igual ao `DashboardService`,
+diferente do filtro de `/api/transactions` (`to` inclusivo, ver
+`TransactionSpecifications`). `validatePeriod` (em `ReportService`)
+rejeita `to <= from` e períodos acima de 5 anos, com 400 via a mesma
+`InvalidTransactionException` já reaproveitada pelo `BudgetService` para
+violação de regra de negócio (não é uma exceção nova por domínio — o
+padrão do projeto já era reaproveitar essa classe para "requisição
+inválida" fora do CRUD de transações propriamente dito).
+
+**Séries temporais**: DAY reaproveita `sumDailyTotals` (mesma query do
+dashboard) preenchendo dias sem movimento com zero. MONTH reaproveita a
+mesma query diária e funde os buckets por mês **em Java** — decisão
+deliberada para não adicionar uma segunda query JPQL com
+`extract(year/month from date)` (JPQL 3.1 suporta, mas o volume de linhas
+diárias de uma pessoa física é pequeno o bastante para não justificar o
+risco). `period` é string `"yyyy-MM-dd"` (DAY) ou `"yyyy-MM"` (MONTH) —
+mesmo formato usado por `monthly-comparison.month`.
+
+**Fluxo por conta vs. evolução de saldo — a distinção que o prompt da
+Fase 8 pediu para documentar**: `accounts-flow` inclui **todas** as
+contas, inclusive `CREDIT_CARD` (`sumTotalsByAccountForPeriod`, query
+nova) — fluxo é receita-despesa *do período*, e excluir o cartão
+esconderia gasto real. `balance-evolution`, ao contrário, reaproveita
+exatamente a regra de disponibilidade do dashboard (`AccountRepository
+.sumInitialBalanceExcludingCreditCard` + uma nova
+`sumDailyTotalsForAvailableAccounts`, cumulativa e sem `CREDIT_CARD`) —
+saldo dia a dia é sempre `initialBalance` das contas de disponibilidade +
+receitas - despesas *dessas mesmas contas*, acumulado até cada dia.
+`netFlow` de uma conta nunca deve ser lido como "saldo" — são conceitos
+diferentes (um é do período, o outro é cumulativo e exclui cartão).
+
+**Comparativo mensal**: N (1-24, `@Max` no controller) chamadas pequenas
+e independentes a `sumIncomeAndExpense` — reaproveita a query do
+dashboard sem modificação, uma por mês. Deliberadamente não é uma
+mega-query com `GROUP BY` mês: o prompt da Fase 8 permite explicitamente
+"múltiplas queries pequenas" quando isso é mais simples que uma query
+"incompreensível", e evita o mesmo risco do `extract()` acima.
+
+**Top despesas/receitas**: reaproveita `TransactionResponse` (nenhum DTO
+novo) — uma query dedicada (`findTopByUserAndTypeAndPeriod`, com `join
+fetch` nas três associações) em vez de `TransactionSpecifications`,
+porque a Specification já fixa `ORDER BY date DESC` para a listagem
+normal e este relatório precisa de `ORDER BY amount DESC`. `limit`
+validado via `@Min(1)`/`@Max(50)` no controller, default 10.
+
+**Métodos de pagamento**: `sumExpensesByPaymentMethod` (nova query,
+`PaymentMethodAmount`), mesmo cálculo de percentual do `expenses-by-category`.
+Motivou o único índice novo da fase (`V5`,
+`idx_transactions_user_payment_method`) — era o único filtro de relatório
+sem índice equivalente ao que já existe para `category_id`/`account_id`.
+
+**Exportação CSV**: `GET /api/reports/export.csv` reaproveita
+`TransactionSpecifications.filter` inteira (convertendo o `to` half-open
+para o `to` inclusivo que a Specification espera, subtraindo um dia) —
+não é uma agregação, é a mesma lista de transações filtradas de
+`GET /api/transactions`, só serializada como CSV em vez de JSON.
+Gerado com `String`/`StringBuilder` puro (sem OpenCSV/Commons CSV), BOM
+UTF-8 no início (Excel no Windows decodifica UTF-8 sem BOM como Latin-1),
+`Content-Disposition: attachment`. PDF ficou fora de escopo (decisão
+explícita do prompt da Fase 8) — CSV é suficiente para o caso de uso
+atual.
 
 ### 9.3 Princípios que preservam a evolução sem refatoração estrutural
 
@@ -966,9 +1037,43 @@ Paginação: offset-based (`page`, `size`) — `recurring-transactions` não
 pagina (lista simples, mesmo padrão de `accounts`/`categories`/
 `payment-methods`, volume baixo por usuário).
 
-Endpoints das Fases 7–8 (`/api/budgets`, `/api/goals`, `/api/reports/*`)
-seguem o mesmo padrão REST e serão detalhados quando a fase correspondente
-começar.
+Budgets (Fase 7, implementada)
+  GET    /api/budgets?year=&month=&categoryId=
+         (sem year/month, assume o mês corrente — ver seção 9.2)
+  POST   /api/budgets
+  GET    /api/budgets/{id}
+  PUT    /api/budgets/{id}
+  DELETE /api/budgets/{id}
+
+Goals (Fase 7, implementada)
+  GET    /api/goals?status=
+  POST   /api/goals
+  GET    /api/goals/{id}
+  PUT    /api/goals/{id}
+  DELETE /api/goals/{id}
+  GET    /api/goals/{goalId}/contributions
+  POST   /api/goals/{goalId}/contributions
+  DELETE /api/goals/{goalId}/contributions/{contributionId}
+         (sem endpoint de update — editar uma contribuição é apagar e
+         recriar, não justifica mais um endpoint)
+
+Reports (Fase 8, implementada — ver seção 9.2.2)
+  GET    /api/reports/summary?from=&to=
+  GET    /api/reports/income-vs-expense?from=&to=&granularity=DAY|MONTH
+  GET    /api/reports/expenses-by-category?from=&to=
+  GET    /api/reports/income-by-category?from=&to=
+  GET    /api/reports/accounts-flow?from=&to=
+  GET    /api/reports/balance-evolution?from=&to=
+  GET    /api/reports/monthly-comparison?months= (1-24, default 6)
+  GET    /api/reports/top-expenses?from=&to=&limit= (1-50, default 10)
+  GET    /api/reports/top-income?from=&to=&limit=
+  GET    /api/reports/payment-methods?from=&to=
+  GET    /api/reports/export.csv?from=&to=&type=&categoryId=&accountId=
+
+`from`/`to` de `/api/reports/*` são half-open `[from, to)` — igual ao
+dashboard, diferente de `/api/transactions` (`to` inclusivo). Período
+máximo de 5 anos para os relatórios detalhados (`InvalidTransactionException`,
+400); `months` e `limit` são validados via `@Min`/`@Max` no controller.
 
 ## 12. Estratégia de memória do Spring Boot
 
