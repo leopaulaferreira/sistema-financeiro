@@ -14,3 +14,12 @@ app:
     secure: false
   cors:
     allowed-origin: http://localhost:5173
+  # Toda a suíte de integração compartilha o mesmo AuthRateLimiter (bean
+  # singleton) e o mesmo IP (127.0.0.1 via MockMvc) — cada AbstractIntegrationTest
+  # já faz register+login, então um limite baixo travaria a suíte inteira.
+  # O comportamento real do limitador é coberto isoladamente por
+  # AuthRateLimiterTest (unitário, sem contexto Spring).
+  auth:
+    rate-limit:
+      max-attempts: 100000
+      window-seconds: 60

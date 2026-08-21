@@ -10,6 +10,7 @@ import com.financeapp.common.exception.DuplicateResourceException;
 import com.financeapp.common.exception.InvalidTransactionException;
 import com.financeapp.common.exception.ResourceNotFoundException;
 import com.financeapp.transaction.TransactionRepository;
+import com.financeapp.transaction.dto.CategoryAmount;
 import com.financeapp.user.User;
 import com.financeapp.user.UserRepository;
 import org.springframework.stereotype.Service;
@@ -19,6 +20,8 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * {@code spent}/{@code remaining}/{@code percentageUsed}/{@code status}
@@ -85,8 +88,24 @@ public class BudgetService {
         int resolvedMonth = month != null ? month : today.getMonthValue();
 
         var spec = BudgetSpecifications.filter(userId, resolvedYear, resolvedMonth, categoryId);
-        return budgetRepository.findAll(spec).stream()
-                .map(budget -> toResponse(userId, budget))
+        List<Budget> budgets = budgetRepository.findAll(spec);
+        if (budgets.isEmpty()) {
+            return List.of();
+        }
+
+        // Todos os orçamentos da lista compartilham o mesmo período (filtro
+        // por year/month acima), então o "spent" de todos pode ser calculado
+        // numa única query agrupada em vez de uma por orçamento (Fase 9: corrige
+        // N+1 detectado na auditoria — ver sumExpenseByCategoriesAndPeriod).
+        LocalDate from = LocalDate.of(resolvedYear, resolvedMonth, 1);
+        LocalDate to = from.plusMonths(1);
+        List<Long> categoryIds = budgets.stream().map(b -> b.getCategory().getId()).distinct().toList();
+        Map<Long, BigDecimal> spentByCategory = transactionRepository
+                .sumExpenseByCategoriesAndPeriod(userId, categoryIds, from, to).stream()
+                .collect(Collectors.toMap(CategoryAmount::categoryId, CategoryAmount::amount));
+
+        return budgets.stream()
+                .map(budget -> toResponse(budget, spentByCategory.getOrDefault(budget.getCategory().getId(), BigDecimal.ZERO)))
                 .toList();
     }
 
@@ -101,6 +120,10 @@ public class BudgetService {
         LocalDate to = from.plusMonths(1);
         BigDecimal spent = nz(transactionRepository.sumExpenseForCategoryAndPeriod(
                 userId, budget.getCategory().getId(), from, to));
+        return toResponse(budget, spent);
+    }
+
+    private BudgetResponse toResponse(Budget budget, BigDecimal spent) {
         BigDecimal remaining = budget.getAmount().subtract(spent);
         BigDecimal percentageUsed = percentageOf(spent, budget.getAmount());
         BudgetStatus status = statusFor(percentageUsed);

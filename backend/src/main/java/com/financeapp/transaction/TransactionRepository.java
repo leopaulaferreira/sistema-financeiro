@@ -119,6 +119,23 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
                                                @Param("from") LocalDate from, @Param("to") LocalDate to);
 
     /**
+     * Mesma agregação de {@link #sumExpenseForCategoryAndPeriod}, mas para
+     * várias categorias de uma vez (Fase 9: evita N+1 em
+     * {@code BudgetService#list}, que antes disparava uma query por
+     * orçamento retornado).
+     */
+    @Query("""
+            select new com.financeapp.transaction.dto.CategoryAmount(t.category.id, t.category.name, sum(t.amount))
+            from Transaction t
+            where t.user.id = :userId and t.type = com.financeapp.common.TransactionType.EXPENSE
+              and t.category.id in :categoryIds and t.date >= :from and t.date < :to
+            group by t.category.id, t.category.name
+            """)
+    List<com.financeapp.transaction.dto.CategoryAmount> sumExpenseByCategoriesAndPeriod(
+            @Param("userId") Long userId, @Param("categoryIds") List<Long> categoryIds,
+            @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /**
      * Resumo financeiro do relatório (Fase 8) — totais, médias (só sobre as
      * transações do tipo correspondente, {@code avg()} ignora NULL em SQL,
      * mesmo truque de {@code sumIncomeAndExpense}) e contagem total, numa

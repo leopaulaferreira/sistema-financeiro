@@ -1272,3 +1272,127 @@ criá-la — decisão tomada com base na seção 13, não antecipada aqui.
 | **8** | Relatórios | Agregações adicionais, exportação (CSV/PDF), UI de relatórios. |
 | **9** | Testes, segurança, performance e acessibilidade | Cobertura de testes (unit/integration) consolidada, revisão de segurança (CSRF/auth/IDOR), medição de memória (seção 12.2) usada para fixar o `-Xmx` definitivo, auditoria de acessibilidade do frontend. |
 | **10** | Deploy e observabilidade | Deploy definitivo/hardening: Nginx + HTTPS + systemd em produção, logging estruturado, healthcheck, rotina de backup do database exclusivo. Reaproveita o que já foi validado no Checkpoint (pós-Fase 3) em vez de repetir a validação do zero. |
+
+## 17. Qualidade e Segurança — Fase 9
+
+Esta fase foi de auditoria e correção cirúrgica, não de features novas. A
+auditoria inicial (backend, frontend, infra/CI) encontrou uma base já sólida
+— rotação de refresh token com detecção de reuso, mitigação de timing attack
+no login, cookies `HttpOnly`/`Secure`/`SameSite=Strict`, CSRF double-submit,
+ownership consistente (404 cross-user) em todos os domínios — sem nenhuma
+vulnerabilidade CRITICAL ou HIGH. Os pontos abaixo documentam o que foi
+corrigido e o que foi conscientemente adiado.
+
+### 17.1 Estratégia de testes
+
+- **Backend**: Testcontainers/PostgreSQL real (sem H2) desde a Fase 1,
+  mantido em todas as fases seguintes — o comportamento real do Postgres
+  (constraints, `CHECK`, `date_trunc` etc.) é parte relevante do
+  comportamento testado. `jacoco-maven-plugin` adicionado nesta fase só
+  como relatório (`target/site/jacoco`), sem gate de cobertura mínima — o
+  projeto não tem uma política de threshold definida, e um limite
+  arbitrário travaria o CI sem sinal real de qualidade.
+- **Frontend**: até a Fase 8 não existia nenhuma suíte de testes. Nesta
+  fase foi criada a infraestrutura mínima — Vitest + React Testing Library
+  + jsdom (`npm run test` / `npm run test:run`) — cobrindo os fluxos mais
+  sutis e fáceis de quebrar sem notar: a estratégia de refresh/CSRF do
+  `api-client` (single-flight de refresh, retry duplo por causa do cookie
+  CSRF de uso único, encerramento de sessão só quando o refresh de fato
+  falha) e o fluxo de login (submit, navegação em caso de sucesso,
+  mensagem de erro em caso de credenciais inválidas). Cobertura deliberada
+  por fluxo crítico, não por componente — a suíte ainda é pequena e deve
+  crescer nas próximas fases que tocarem frontend.
+
+### 17.2 Segurança
+
+- **Rate limiting em auth** (novo): `AuthRateLimiter`, em memória, aplicado
+  a `/api/auth/{register,login,refresh}`. Chave por IP do cliente
+  (`request.getRemoteAddr()`, não `X-Forwarded-For` — não há proxy reverso
+  confiável antes da Fase 10, e confiar num header vindo do próprio
+  cliente permitiria burlar o limite trivialmente) — deliberadamente não
+  por e-mail, para não reabrir o canal de enumeração de e-mail que a
+  mitigação de timing attack do login já fecha. Limite configurável via
+  `app.auth.rate-limit.max-attempts`/`window-seconds` (default 10
+  tentativas/60s). **Limitação conhecida**: em memória, por instância —
+  não escala corretamente atrás de múltiplas instâncias sem estado
+  compartilhado; aceitável para a infraestrutura atual (instância única).
+- **CSRF**: já cobria header ausente; esta fase adicionou o caso de header
+  presente mas com valor diferente do cookie (double-submit adulterado) —
+  também rejeitado com 403, como esperado.
+- **CORS**: origem única via `app.cors.allowed-origin` (nunca `*` com
+  credentials).
+- **Headers de segurança**: o Spring Security já habilita por padrão
+  `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` e HSTS
+  (quando a conexão é HTTPS) sem configuração explícita adicional — CSP
+  completa fica para a Fase 10, porque depende do desenho final do
+  deploy/Nginx (evita configurar algo aqui que a Fase 10 teria que
+  desfazer ou duplicar de forma conflitante).
+- **Mass assignment**: estruturalmente prevenido — todo endpoint recebe um
+  DTO `record` específico (create/update), nunca a entity JPA; `userId`,
+  timestamps e todo valor derivado (`nextExecutionDate`, `spent`,
+  `currentAmount` etc.) nunca vêm do cliente, sempre calculados no
+  backend.
+- **Tratamento de erros**: `GlobalExceptionHandler` já não expunha stack
+  trace/SQL/segredo em nenhum caso (auditado, sem alteração necessária).
+
+### 17.3 Performance
+
+- **N+1 corrigido** em `BudgetService#list` e `GoalService#list`: cada um
+  chamava uma query de agregação (`spent` / soma de contribuições) por
+  item da lista. Como o filtro de orçamentos já restringe a lista a um
+  único período (`year`/`month`), o `spent` de todos os orçamentos
+  retornados passou a vir de uma única query agrupada
+  (`sumExpenseByCategoriesAndPeriod`); o progresso de todas as metas
+  retornadas, de uma única query agrupada por `goal_id`
+  (`sumAmountByGoalIds`). O caminho de item único (`get`/`create`/
+  `update`/mutação de contribuição) continua com a query pontual — não
+  compensa buscar em lote para calcular o resultado de uma única
+  mutação.
+- **Índices**: nenhum índice novo foi necessário além do já adicionado na
+  Fase 8 (`transactions(user_id, payment_method_id, date)`) — os padrões
+  de query desta fase (auth, rate limiter em memória, agregações de
+  budget/goal) já estavam cobertos pelos índices existentes de
+  `user_id`/`date`/`category_id`.
+- **Bundle do frontend**: o build gerava um único chunk de ~985kB
+  (sobretudo Recharts, usado só em dashboard e relatórios). As páginas
+  passaram a ser carregadas sob demanda por rota
+  (`React.lazy`/`Suspense` em `app-routes.tsx`), reduzindo o chunk
+  principal para ~373kB e isolando o Recharts (~357kB) num chunk separado,
+  carregado só quando o usuário visita dashboard/relatórios.
+- **CSV de relatórios**: continua gerado inteiramente em memória
+  (decisão já documentada na Fase 8). Auditado nesta fase e considerado
+  aceitável para o volume esperado de um app pessoal — streaming ficaria
+  para uma fase futura se o volume real justificar.
+- **Scheduler de recorrências**: auditado (lock pessimista por regra,
+  catch-up limitado a 500 execuções/regra/rodada, transação por regra) —
+  nenhum problema de deadlock ou duplicação encontrado; comportamento
+  mantido sem alteração.
+
+### 17.4 Acessibilidade
+
+Auditoria manual das páginas principais (sem ferramenta de browser nesta
+sessão — validado lendo os componentes e via shadcn/Radix, que já resolve
+foco/trap/Escape em modais e dialogs por padrão). Formulários já usam
+`Label`/`htmlFor`/`id` consistentemente; botões somente-ícone já têm
+`aria-label`; nenhuma correção estrutural nova foi necessária nesta
+auditoria — ponto a reconfirmar com inspeção visual real assim que houver
+ferramenta de browser disponível numa sessão futura.
+
+### 17.5 CI
+
+Não existia workflow de CI antes desta fase. Adicionado
+`.github/workflows/ci.yml` com dois jobs independentes, sem depender de
+segredo de produção: **backend** (`./mvnw test` contra Testcontainers real
++ `./mvnw package`) e **frontend** (`npm ci` determinístico, `lint`,
+`test:run`, `build`, `audit` — o audit não falha o job, é sinal a revisar
+manualmente, já que o projeto ainda não tem uma política formal de
+severidade/CVE aceitável).
+
+### 17.6 Limitações conhecidas desta fase
+
+Sem ferramenta de browser disponível na sessão — validação de UI e
+acessibilidade feita por leitura de código e pelos testes automatizados
+novos, não por inspeção visual real. A suíte de testes frontend é nova e
+deliberadamente pequena (fluxos críticos, não cobertura ampla) — deve
+crescer organicamente nas próximas fases. Rate limiting é em memória e
+não sobrevive a múltiplas instâncias do backend.

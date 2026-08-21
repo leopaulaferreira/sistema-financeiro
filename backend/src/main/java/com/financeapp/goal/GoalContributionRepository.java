@@ -23,4 +23,13 @@ public interface GoalContributionRepository extends JpaRepository<GoalContributi
      */
     @Query("select sum(c.amount) from GoalContribution c where c.goal.id = :goalId")
     BigDecimal sumAmountByGoalId(@Param("goalId") Long goalId);
+
+    /**
+     * Mesma agregação de {@link #sumAmountByGoalId}, mas para várias metas
+     * de uma vez (Fase 9: evita N+1 em {@code GoalService#list}, que antes
+     * disparava uma query por meta retornada).
+     */
+    @Query("select new com.financeapp.goal.GoalAmount(c.goal.id, sum(c.amount)) " +
+            "from GoalContribution c where c.goal.id in :goalIds group by c.goal.id")
+    List<GoalAmount> sumAmountByGoalIds(@Param("goalIds") List<Long> goalIds);
 }
