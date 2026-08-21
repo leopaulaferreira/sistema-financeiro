@@ -14,9 +14,24 @@ spring:
     open-in-view: false
   flyway:
     enabled: true
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
 
 server:
   port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+# Fase 10: só /actuator/health é exposto via HTTP, e sem detalhes (evita
+# vazar config/dependências internas em produção); nenhum outro endpoint do
+# Actuator (env, beans, configprops, mappings, heapdump) é habilitado.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
 
 app:
   jwt:
