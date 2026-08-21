@@ -26,14 +26,18 @@ public class AuthController {
 
     private final AuthService authService;
     private final CookieService cookieService;
+    private final AuthRateLimiter rateLimiter;
 
-    public AuthController(AuthService authService, CookieService cookieService) {
+    public AuthController(AuthService authService, CookieService cookieService, AuthRateLimiter rateLimiter) {
         this.authService = authService;
         this.cookieService = cookieService;
+        this.rateLimiter = rateLimiter;
     }
 
     @PostMapping("/register")
-    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request) {
+    public ResponseEntity<UserResponse> register(@Valid @RequestBody RegisterRequest request,
+                                                  HttpServletRequest httpRequest) {
+        rateLimiter.checkAllowed(clientIp(httpRequest));
         UserResponse created = authService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -42,6 +46,7 @@ public class AuthController {
     public ResponseEntity<UserResponse> login(@Valid @RequestBody LoginRequest request,
                                                HttpServletRequest httpRequest,
                                                HttpServletResponse httpResponse) {
+        rateLimiter.checkAllowed(clientIp(httpRequest));
         AuthService.LoginResult result = authService.login(request, userAgent(httpRequest));
         cookieService.addAccessTokenCookie(httpResponse, result.tokens().accessToken());
         cookieService.addRefreshTokenCookie(httpResponse, result.tokens().rawRefreshToken());
@@ -50,6 +55,7 @@ public class AuthController {
 
     @PostMapping("/refresh")
     public ResponseEntity<Void> refresh(HttpServletRequest httpRequest, HttpServletResponse httpResponse) {
+        rateLimiter.checkAllowed(clientIp(httpRequest));
         String rawRefreshToken = extractCookie(httpRequest, CookieService.REFRESH_TOKEN_COOKIE)
                 .orElseThrow(() -> new InvalidTokenException("Refresh token ausente"));
         AuthService.TokenPair tokens = authService.refresh(rawRefreshToken, userAgent(httpRequest));
@@ -74,6 +80,13 @@ public class AuthController {
     private String userAgent(HttpServletRequest request) {
         String value = request.getHeader("User-Agent");
         return value == null ? "unknown" : value;
+    }
+
+    // getRemoteAddr() (não X-Forwarded-For): não há proxy reverso confiável
+    // nesta fase (fica para a Fase 10), então confiar num header vindo do
+    // próprio cliente permitiria burlar o rate limit trivialmente.
+    private String clientIp(HttpServletRequest request) {
+        return request.getRemoteAddr();
     }
 
     private Optional<String> extractCookie(HttpServletRequest request, String name) {
