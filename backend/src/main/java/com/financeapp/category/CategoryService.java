@@ -1,5 +1,6 @@
 package com.financeapp.category;
 
+import com.financeapp.budget.BudgetRepository;
 import com.financeapp.category.dto.CategoryRequest;
 import com.financeapp.category.dto.CategoryResponse;
 import com.financeapp.common.TransactionType;
@@ -21,15 +22,18 @@ public class CategoryService {
     private final UserRepository userRepository;
     private final TransactionRepository transactionRepository;
     private final RecurringTransactionRepository recurringTransactionRepository;
+    private final BudgetRepository budgetRepository;
 
     public CategoryService(CategoryRepository categoryRepository,
                             UserRepository userRepository,
                             TransactionRepository transactionRepository,
-                            RecurringTransactionRepository recurringTransactionRepository) {
+                            RecurringTransactionRepository recurringTransactionRepository,
+                            BudgetRepository budgetRepository) {
         this.categoryRepository = categoryRepository;
         this.userRepository = userRepository;
         this.transactionRepository = transactionRepository;
         this.recurringTransactionRepository = recurringTransactionRepository;
+        this.budgetRepository = budgetRepository;
     }
 
     @Transactional
@@ -66,6 +70,9 @@ public class CategoryService {
         }
         if (recurringTransactionRepository.existsByCategoryId(category.getId())) {
             throw new ResourceInUseException("Não é possível excluir uma categoria com recorrências vinculadas");
+        }
+        if (budgetRepository.existsByCategoryId(category.getId())) {
+            throw new ResourceInUseException("Não é possível excluir uma categoria com orçamentos vinculados");
         }
         categoryRepository.delete(category);
     }
