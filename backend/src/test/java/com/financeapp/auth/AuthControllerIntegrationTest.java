@@ -112,6 +112,22 @@ class AuthControllerIntegrationTest {
     }
 
     @Test
+    void registerWithInvalidCsrfHeader_returns403() throws Exception {
+        Cookie csrf = fetchCsrfCookie();
+        RegisterRequest request = new RegisterRequest("CSRF Inválido", "csrfinvalido@example.com", "senha1234");
+
+        // Cookie XSRF-TOKEN válido, mas header X-XSRF-TOKEN com valor diferente
+        // (double-submit exige que os dois batam) — deve ser rejeitado como o
+        // caso de header ausente, não silenciosamente aceito.
+        mockMvc.perform(post("/api/auth/register")
+                        .cookie(csrf)
+                        .header("X-XSRF-TOKEN", csrf.getValue() + "-adulterado")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void registerWithDuplicateEmail_returns409() throws Exception {
         Cookie csrf = fetchCsrfCookie();
         registerUser(csrf, "duplicado@example.com", "senha1234");
