@@ -1134,14 +1134,15 @@ testar):
    final escolhido) neste documento quando a validação for feita, para que
    a decisão fique rastreável.
 
-**Ainda não medido** (Fase 10, seção 18): a VM real escolhida para o
-deploy (`167.234.233.150`, ver seção 18) já foi inspecionada via SSH,
-mas o deploy em si ainda não foi aplicado nela, então
-`deploy/systemd/sistema-financeiro.service` usa exatamente os valores
-conservadores desta seção como ponto de partida, não como valor
-definitivo. Este processo de medição continua pendente — é a primeira
-coisa a rodar depois do primeiro deploy real (ver DEPLOYMENT.md, seção
-"Consumo de memória").
+**Medição formal ainda pendente** (Fase 10, seção 18): o deploy já está
+ao vivo em `167.234.233.150` rodando exatamente os valores conservadores
+desta seção (`deploy/systemd/sistema-financeiro.service`), e um
+snapshot real (idle, via `systemctl status`, ~20h após o start) mostrou
+`Memory: 83.3M (peak: 323.0M swap: 268.9M swap peak: 322.0M)` — dentro
+do teto, sem indicação de pressão. Isso não é o processo formal descrito
+acima (Native Memory Tracking + RSS sob carga gerada de propósito), que
+continua pendente — é a primeira coisa a rodar e registrar aqui (ver
+DEPLOYMENT.md, seção "Consumo de memória").
 
 Backend continua como **JAR executado via systemd** — decisão já aprovada,
 mantida.
@@ -1284,7 +1285,7 @@ procedimento operacional completo.
 | **7** | Orçamentos e metas | `budgets`, `financial_goals`/`goal_contributions` (migration `V4`), UI de acompanhamento (orçado x realizado, progresso de meta). Detalhado na seção 9.2. |
 | **8** | Relatórios | Agregações adicionais, exportação (CSV/PDF), UI de relatórios. |
 | **9** | Testes, segurança, performance e acessibilidade | Cobertura de testes (unit/integration) consolidada, revisão de segurança (CSRF/auth/IDOR), medição de memória (seção 12.2) usada para fixar o `-Xmx` definitivo, auditoria de acessibilidade do frontend. |
-| **10** | Deploy e observabilidade | **Implementada** — templates de deploy (systemd/Nginx/scripts) em `deploy/`, perfil `application-prod.yml`, IP real atrás de proxy confiável no rate limiter, Actuator restrito a `/actuator/health`, CSP/security headers, backup/restore com ciclo real validado, `DEPLOYMENT.md`. Ver seção 18. **Esta é a última fase do roadmap atual** — trabalho futuro é evolução nova, não uma "Fase 11" automática. |
+| **10** | Deploy e observabilidade | **Implementada e ao vivo** — templates de deploy (systemd/Nginx/scripts) em `deploy/`, perfil `application-prod.yml`, IP real atrás de proxy confiável no rate limiter, Actuator restrito a `/actuator/health`, CSP/security headers, backup/restore com ciclo real validado, `DEPLOYMENT.md`, e deploy aplicado de fato em `167.234.233.150` (`finance.leofe.com.br`, HTTPS real). Ver seção 18. **Esta é a última fase do roadmap atual** — trabalho futuro é evolução nova, não uma "Fase 11" automática. |
 
 ## 17. Qualidade e Segurança — Fase 9
 
@@ -1412,23 +1413,26 @@ não sobrevive a múltiplas instâncias do backend.
 
 ## 18. Deploy, Hardening e Observabilidade — Fase 10
 
-**Estado real desta fase**: houve inspeção real (SSH, somente leitura) de
-duas VMs candidatas para hospedar este deploy:
+**Estado real desta fase**: duas VMs candidatas foram inspecionadas via
+SSH:
 - `147.15.127.35` — já hospeda o projeto GridPulse; descartada por
   restrição de memória disponível.
-- `167.234.233.150` — identificada como a VM adequada: tem Nginx nativo
-  já instalado e já hospeda outros projetos do usuário.
+- `167.234.233.150` — escolhida: tem Nginx nativo já instalado e já
+  hospeda outros projetos do usuário.
 
-Essa inspeção não é o mesmo que o deploy em si — **o deploy do
-sistema-financeiro ainda não foi aplicado nem validado em nenhuma VM**.
-Tudo que dependeria disso (instalar/configurar o Nginx de verdade para
-este domínio, emitir certificado, medir RSS em produção, testar
-firewall) continua produzido como **template versionado** em `deploy/` +
-procedimento documentado em `DEPLOYMENT.md`, para o operador aplicar em
-`167.234.233.150`. O que é lógica de código (perfil `prod`, IP real atrás
-de proxy, Actuator, CSP da API) foi implementado e testado de verdade
-nesta sessão; o que é infraestrutura (systemd/Nginx/HTTPS/firewall reais
-deste domínio) ainda não.
+**O deploy foi aplicado e está ao vivo em `167.234.233.150`**, confirmado
+por verificação read-only real (não só o template revisado): backend
+como `sistema-financeiro.service` (systemd) ativo desde 2026-08-21
+05:32:54 UTC, servindo `/opt/sistema-financeiro/app.jar`; Nginx com
+vhost `finance.leofe.com.br` habilitado; certificado Let's Encrypt real
+válido até 2026-11-19 (`certbot certificates`); `curl
+https://finance.leofe.com.br/` responde HTTP 200; Postgres do projeto
+respondendo em `127.0.0.1:5433`; `/etc/sistema-financeiro/app.env` com
+permissão `0600`. O que é lógica de código (perfil `prod`, IP real atrás
+de proxy, Actuator, CSP da API) foi implementado e testado nesta sessão;
+o que é infraestrutura (systemd/Nginx/HTTPS deste domínio) foi aplicado
+de verdade em `167.234.233.150`, não é mais só um template — os arquivos
+em `deploy/` continuam sendo a fonte versionada do que está rodando lá.
 
 ### 18.1 Arquitetura de produção
 
@@ -1599,13 +1603,15 @@ não um "desfazer" mágico.
 
 ### 18.13 Limitações conhecidas desta fase
 
-Nenhuma vulnerabilidade CRITICAL/HIGH encontrada na auditoria final. A VM
-real (`167.234.233.150`) já foi inspecionada via SSH, mas o deploy ainda
-não foi aplicado nela: Nginx/HTTPS/firewall/systemd deste domínio nunca
-rodaram de fato, só os templates foram produzidos e revisados; consumo de
-memória real não foi medido (seção 12.2 continua pendente); o smoke test
-de produção (`DEPLOYMENT.md`, seção Smoke test) é um checklist para o
-operador rodar após o primeiro deploy real, não algo já executado. O
+Nenhuma vulnerabilidade CRITICAL/HIGH encontrada na auditoria final. O
+deploy está aplicado e ao vivo em `167.234.233.150` (systemd/Nginx/HTTPS
+reais, confirmados via verificação read-only — ver início desta seção),
+não é mais só template. Ainda pendente: firewall não foi testado
+explicitamente nesta verificação; consumo de memória real só tem um
+snapshot idle observado (ver seção 12.2), não a medição formal sob carga
+descrita lá; o smoke test de produção (`DEPLOYMENT.md`, seção Smoke
+test) é um checklist que ainda não foi rodado ponta a ponta contra a VM
+real, mesmo com o deploy já ao vivo. O
 teste do IP real atrás de proxy só cobre o caminho confiável (127.0.0.1)
 — a garantia do caminho não-confiável vem do mecanismo padrão do Tomcat,
 não de um teste deste projeto.

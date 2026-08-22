@@ -4,23 +4,27 @@ Procedimento operacional para colocar a aplicação em produção. Este
 documento assume uma VM Linux pequena, compartilhada com outros projetos
 (ver ARCHITECTURE.md §12–§13), com acesso SSH de um operador humano.
 
-**Inspeção real já feita, deploy ainda não.** Houve acesso SSH real
-(somente leitura) a duas VMs candidatas para avaliar onde hospedar esta
-aplicação:
+**O deploy está aplicado e ao vivo.** Duas VMs candidatas foram
+inspecionadas via SSH:
 - `147.15.127.35` — já hospeda o projeto GridPulse; descartada para este
   deploy por restrição de memória disponível.
-- `167.234.233.150` — identificada como a VM adequada para este deploy:
-  tem Nginx nativo já instalado e já hospeda outros projetos do usuário.
+- `167.234.233.150` — escolhida: tem Nginx nativo já instalado e já
+  hospeda outros projetos do usuário.
 
-Essa inspeção não deve ser confundida com o deploy em si: **os comandos
-abaixo ainda não foram executados contra `167.234.233.150`** (nem contra
-nenhuma outra VM) — continuam sendo o procedimento a seguir, não um
-registro do que já rodou. Este documento só deve dizer que o deploy foi
-concluído depois que os passos abaixo tiverem sido de fato aplicados e
-validados na VM real. Os templates em `deploy/` foram criados e o
-backend/frontend foram validados localmente (build, testes, ciclo real de
-backup→restore contra Postgres local, fora da VM). Todo comando marcado
-como "executar na VM" continua responsabilidade do operador.
+O deploy foi executado de fato em `167.234.233.150` e confirmado por
+verificação read-only real (não é só o template revisado): backend
+como `sistema-financeiro.service` (systemd) ativo, servindo
+`/opt/sistema-financeiro/app.jar`; Nginx com vhost
+`finance.leofe.com.br` habilitado; certificado Let's Encrypt real válido
+(`certbot certificates`); `curl https://finance.leofe.com.br/` responde
+HTTP 200; Postgres do projeto respondendo em `127.0.0.1:5433`;
+`/etc/sistema-financeiro/app.env` com permissão `0600`. Antes disso, os
+templates em `deploy/` foram criados e o backend/frontend validados
+localmente (build, testes, ciclo real de backup→restore contra Postgres
+local). Os passos abaixo documentam o procedimento seguido — para
+qualquer novo deploy/rollback/alteração nesta VM, reconectar e reconferir
+o estado real antes de assumir que nada mudou (é uma VM compartilhada e
+de recursos apertados).
 
 ## 1. Pré-requisitos
 
@@ -307,9 +311,15 @@ que existe.
 
 ## Consumo de memória
 
-**Não medido em produção real ainda** (a VM real — `167.234.233.150` —
-já foi inspecionada, mas o deploy em si ainda não rodou lá, então não há
-processo real para medir). O
+**Snapshot real observado (idle, via `systemctl status`), não medição
+formal sob carga:** cgroup do `sistema-financeiro.service` em
+`167.234.233.150` mostrando `Memory: 83.3M (peak: 323.0M swap: 268.9M
+swap peak: 322.0M)` cerca de 20h após o start — o pico alto bate com o
+warmup lento do primeiro start (ver nota de "Thread starvation" abaixo).
+Isso não substitui o processo formal de ARCHITECTURE.md §12.2 (Native
+Memory Tracking + RSS sob carga real gerada com `hey`/`k6`), que
+continua pendente — é só um dado de referência a favor de manter o
+`-Xmx256m` atual como razoável, não uma validação completa. O
 `.service` usa o ponto de partida conservador já documentado em
 ARCHITECTURE.md §12.1 (`-Xms64m -Xmx256m`, `SerialGC`, `MaxMetaspaceSize=128m`,
 `ReservedCodeCacheSize=64m`, `Xss512k`) — são valores de partida
