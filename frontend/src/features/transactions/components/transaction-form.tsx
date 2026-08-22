@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -13,6 +14,7 @@ import { useAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import { usePaymentMethodsQuery } from '@/features/payment-methods/hooks/use-payment-methods'
 import { useCreateTransaction, useUpdateTransaction } from '../hooks/use-transactions'
 import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
+import { paths } from '@/routes/paths'
 import type { Transaction, TransactionType } from '@/types/finance'
 import type { TransactionRequest } from '@/types/requests'
 
@@ -142,15 +144,41 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
     )
   }
 
-  const hasNoAccounts = (accounts ?? []).length === 0
-  const hasNoCategories = (categories ?? []).length === 0
-  const hasNoPaymentMethods = (paymentMethods ?? []).length === 0
+  const missingResources = [
+    { key: 'account', missing: (accounts ?? []).length === 0, message: 'Nenhuma conta cadastrada', cta: 'Criar conta', to: paths.accounts },
+    {
+      key: 'category',
+      missing: (categories ?? []).length === 0,
+      message: 'Nenhuma categoria cadastrada',
+      cta: 'Criar categoria',
+      to: paths.categories,
+    },
+    {
+      key: 'payment-method',
+      missing: (paymentMethods ?? []).length === 0,
+      message: 'Nenhum método de pagamento cadastrado',
+      cta: 'Criar método de pagamento',
+      to: paths.paymentMethods,
+    },
+  ].filter((resource) => resource.missing)
 
-  if (hasNoAccounts || hasNoCategories || hasNoPaymentMethods) {
+  if (missingResources.length > 0) {
     return (
-      <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-text-secondary">
-        Antes de cadastrar uma transação, crie ao menos uma conta, uma categoria e um método de pagamento.
-      </p>
+      <div className="flex flex-col gap-3 rounded-lg border border-dashed border-border px-4 py-5">
+        <p className="text-sm text-text-secondary">
+          Para cadastrar uma transação, você precisa ter ao menos uma conta, uma categoria e um método de pagamento.
+        </p>
+        <ul className="flex flex-col gap-2">
+          {missingResources.map((resource) => (
+            <li key={resource.key} className="flex items-center justify-between gap-3 rounded-lg bg-surface-hover px-3 py-2">
+              <span className="text-sm text-foreground">{resource.message}</span>
+              <Button asChild size="sm" variant="secondary">
+                <Link to={resource.to}>{resource.cta}</Link>
+              </Button>
+            </li>
+          ))}
+        </ul>
+      </div>
     )
   }
 

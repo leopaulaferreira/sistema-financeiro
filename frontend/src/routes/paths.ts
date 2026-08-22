@@ -3,6 +3,7 @@ export const paths = {
   transactions: '/transacoes',
   accounts: '/contas',
   categories: '/categorias',
+  paymentMethods: '/metodos-pagamento',
   recurring: '/recorrencias',
   budgets: '/orcamentos',
   goals: '/metas',
