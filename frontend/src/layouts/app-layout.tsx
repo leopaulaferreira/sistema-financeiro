@@ -12,6 +12,8 @@ const pageTitles: Record<string, string> = {
   [paths.transactions]: 'Transações',
   [paths.accounts]: 'Contas',
   [paths.categories]: 'Categorias',
+  [paths.paymentMethods]: 'Métodos de pagamento',
+  [paths.recurring]: 'Recorrências',
   [paths.budgets]: 'Orçamentos',
   [paths.goals]: 'Metas',
   [paths.reports]: 'Relatórios',

@@ -1134,6 +1134,15 @@ testar):
    final escolhido) neste documento quando a validação for feita, para que
    a decisão fique rastreável.
 
+**Ainda não medido** (Fase 10, seção 18): a VM real escolhida para o
+deploy (`167.234.233.150`, ver seção 18) já foi inspecionada via SSH,
+mas o deploy em si ainda não foi aplicado nela, então
+`deploy/systemd/sistema-financeiro.service` usa exatamente os valores
+conservadores desta seção como ponto de partida, não como valor
+definitivo. Este processo de medição continua pendente — é a primeira
+coisa a rodar depois do primeiro deploy real (ver DEPLOYMENT.md, seção
+"Consumo de memória").
+
 Backend continua como **JAR executado via systemd** — decisão já aprovada,
 mantida.
 
@@ -1237,6 +1246,10 @@ concluir que uma instância nova é necessária, um único container Postgres
 dedicado a este projeto (não acoplado a outro) é a forma recomendada de
 criá-la — decisão tomada com base na seção 13, não antecipada aqui.
 
+Templates versionados e prontos para uso em `deploy/` (systemd, Nginx,
+scripts de backup/restore/deploy) — ver seção 18 e `DEPLOYMENT.md` para o
+procedimento operacional completo.
+
 ## 15. Decisões técnicas e trade-offs
 
 | Decisão | Escolha | Alternativa descartada | Motivo |
@@ -1271,7 +1284,7 @@ criá-la — decisão tomada com base na seção 13, não antecipada aqui.
 | **7** | Orçamentos e metas | `budgets`, `financial_goals`/`goal_contributions` (migration `V4`), UI de acompanhamento (orçado x realizado, progresso de meta). Detalhado na seção 9.2. |
 | **8** | Relatórios | Agregações adicionais, exportação (CSV/PDF), UI de relatórios. |
 | **9** | Testes, segurança, performance e acessibilidade | Cobertura de testes (unit/integration) consolidada, revisão de segurança (CSRF/auth/IDOR), medição de memória (seção 12.2) usada para fixar o `-Xmx` definitivo, auditoria de acessibilidade do frontend. |
-| **10** | Deploy e observabilidade | Deploy definitivo/hardening: Nginx + HTTPS + systemd em produção, logging estruturado, healthcheck, rotina de backup do database exclusivo. Reaproveita o que já foi validado no Checkpoint (pós-Fase 3) em vez de repetir a validação do zero. |
+| **10** | Deploy e observabilidade | **Implementada** — templates de deploy (systemd/Nginx/scripts) em `deploy/`, perfil `application-prod.yml`, IP real atrás de proxy confiável no rate limiter, Actuator restrito a `/actuator/health`, CSP/security headers, backup/restore com ciclo real validado, `DEPLOYMENT.md`. Ver seção 18. **Esta é a última fase do roadmap atual** — trabalho futuro é evolução nova, não uma "Fase 11" automática. |
 
 ## 17. Qualidade e Segurança — Fase 9
 
@@ -1396,3 +1409,203 @@ novos, não por inspeção visual real. A suíte de testes frontend é nova e
 deliberadamente pequena (fluxos críticos, não cobertura ampla) — deve
 crescer organicamente nas próximas fases. Rate limiting é em memória e
 não sobrevive a múltiplas instâncias do backend.
+
+## 18. Deploy, Hardening e Observabilidade — Fase 10
+
+**Estado real desta fase**: houve inspeção real (SSH, somente leitura) de
+duas VMs candidatas para hospedar este deploy:
+- `147.15.127.35` — já hospeda o projeto GridPulse; descartada por
+  restrição de memória disponível.
+- `167.234.233.150` — identificada como a VM adequada: tem Nginx nativo
+  já instalado e já hospeda outros projetos do usuário.
+
+Essa inspeção não é o mesmo que o deploy em si — **o deploy do
+sistema-financeiro ainda não foi aplicado nem validado em nenhuma VM**.
+Tudo que dependeria disso (instalar/configurar o Nginx de verdade para
+este domínio, emitir certificado, medir RSS em produção, testar
+firewall) continua produzido como **template versionado** em `deploy/` +
+procedimento documentado em `DEPLOYMENT.md`, para o operador aplicar em
+`167.234.233.150`. O que é lógica de código (perfil `prod`, IP real atrás
+de proxy, Actuator, CSP da API) foi implementado e testado de verdade
+nesta sessão; o que é infraestrutura (systemd/Nginx/HTTPS/firewall reais
+deste domínio) ainda não.
+
+### 18.1 Arquitetura de produção
+
+```
+Nginx (:443, HTTPS via Certbot)
+  ├─ /            → frontend estático (/var/www/sistema-financeiro/current, dist/ do Vite)
+  └─ /api/*       → proxy → Spring Boot (127.0.0.1:SERVER_PORT)
+                              └─ PostgreSQL (127.0.0.1/rede privada, banco/role exclusivos)
+```
+
+Backend nunca público (`server.address=127.0.0.1` no perfil `prod`);
+PostgreSQL nunca público (seção 13). Nginx é o único ponto de entrada.
+
+### 18.2 Perfil de produção e binding
+
+`application-prod.yml` (ativado por `SPRING_PROFILES_ACTIVE=prod`, ver
+`deploy/systemd/sistema-financeiro.service`): `server.address: 127.0.0.1`;
+`SERVER_PORT` continua vindo de variável de ambiente (nenhuma porta
+"reservada" é assumida — o operador escolhe depois de checar portas já em
+uso na VM real, `DEPLOYMENT.md` §2). Nenhum segredo tem default nesse
+arquivo — a aplicação falha ao subir (fail-fast) sem `DB_URL`/`DB_USERNAME`/
+`DB_PASSWORD`/`JWT_SECRET`.
+
+### 18.3 IP real atrás de proxy confiável (rate limiter)
+
+A Fase 9 documentava explicitamente que `AuthRateLimiter` usava
+`request.getRemoteAddr()` porque "não há proxy reverso confiável antes da
+Fase 10". Esta fase resolve isso via **Tomcat `RemoteIpValve`**
+(`server.forward-headers-strategy=native` + `server.tomcat.remoteip.internal-proxies`
+no perfil `prod`) em vez de lógica própria: o valve só honra
+`X-Forwarded-For`/`X-Forwarded-Proto` quando a conexão TCP **direta**
+vem de um endereço da allowlist (`127.0.0.1` — o Nginx, rodando na mesma
+máquina); qualquer outra origem tem o header ignorado e `getRemoteAddr()`
+permanece o IP real da conexão. `AuthController.clientIp()` não mudou
+(continua `request.getRemoteAddr()`) — o valor que ele lê já vem
+reescrito corretamente pelo container antes de chegar ao filtro.
+
+Coberto por `TrustedProxyRateLimitIntegrationTest` (Tomcat real via
+`webEnvironment=RANDOM_PORT`, não MockMvc — `RemoteIpValve` não participa
+do pipeline simulado do MockMvc): confirma que, com o valve configurado,
+o rate limiter passa a distinguir clientes pelo IP forjado em
+`X-Forwarded-For` em vez de colapsar todos no IP do proxy. **Limitação de
+teste**: só é possível exercitar o caminho "confiável" (conexão de
+127.0.0.1, igual ao Nginx local) — não há como, num ambiente de teste
+local, originar uma conexão de fora da loopback para provar que o header
+é ignorado nesse caso. Essa garantia vem da allowlist `internal-proxies`
+do próprio `RemoteIpValve`, mecanismo padrão do Tomcat, não de lógica
+nova escrita neste projeto.
+
+### 18.4 Actuator / healthcheck
+
+`spring-boot-starter-actuator` adicionado, restrito a
+`/actuator/health` (`management.endpoints.web.exposure.include=health`,
+`management.endpoint.health.show-details=never`) — nenhum outro endpoint
+(`env`, `beans`, `configprops`, `mappings`, `heapdump`) é exposto via
+HTTP, em nenhum perfil. `/actuator/health` foi adicionado à lista de
+endpoints públicos do `SecurityConfig` (não pode exigir sessão — é
+consultado por monitoramento/`systemctl`).
+
+### 18.5 CSP e security headers
+
+Dividido deliberadamente entre as duas camadas para não duplicar/
+conflitar:
+
+- **API (Spring Security)**: CSP restritiva (`default-src 'none';
+  frame-ancestors 'none'; base-uri 'none'`) — a API só devolve JSON, nunca
+  HTML/script, então não precisa liberar nada. Mais `Referrer-Policy:
+  strict-origin-when-cross-origin` e `Permissions-Policy` restritivo.
+  `X-Content-Type-Options`, `X-Frame-Options` e HSTS (sobre HTTPS)
+  continuam vindo do default do Spring Security, sem alteração.
+- **Frontend estático (Nginx)**: CSP permitindo o bundle React real
+  (`script-src 'self'`, sem `unsafe-eval`; `style-src 'self'
+  'unsafe-inline'` — Radix UI, usado pelo shadcn/ui, define estilos
+  inline via JS para posicionar popover/dropdown/tooltip, então
+  `unsafe-inline` em `style-src` é necessário ali, não uma liberação
+  genérica). HSTS conservador (sem `preload`/`includeSubDomains`) só deve
+  ser ativado depois de validar HTTPS de ponta a ponta (`DEPLOYMENT.md`
+  §12).
+
+### 18.6 CORS e cookies em produção
+
+CORS continua restrito a uma origem configurável
+(`app.cors.allowed-origin`) — como frontend e backend passam a ser
+same-origin via Nginx em produção, CORS deixa de ser estritamente
+necessário para o navegador (mesma origem não aciona preflight), mas a
+configuração é mantida por segurança em profundidade e porque o backend
+continua utilizável isoladamente (ex.: um cliente `curl`/mobile futuro).
+Cookies de auth (`access_token`/`refresh_token`) já eram `HttpOnly` +
+`SameSite=Strict`; `Secure` passa a `true` de fato em produção
+(`COOKIE_SECURE=true` no `app.env`, HTTPS obrigatório). Cookie CSRF
+(`XSRF-TOKEN`) continua legível pelo frontend (double-submit), sem
+alteração de comportamento.
+
+### 18.7 Frontend same-origin
+
+`frontend/src/lib/env.ts`: sem `VITE_API_URL` definida, o build de
+produção agora resolve para `window.location.origin` em vez de falhar —
+o frontend chama `/api` na mesma origem que o Nginx serve, e o proxy
+cuida do resto. Antes desta fase, o build de produção **exigia**
+`VITE_API_URL` (lançava erro sem ela); isso mudou porque hardcodar um
+domínio de backend absoluto no bundle não fazia sentido numa arquitetura
+same-origin. `VITE_API_URL` continua aceita como override explícito.
+
+### 18.8 PostgreSQL, migrations e backup
+
+PostgreSQL: opção definida só depois do checklist real da seção 13 (não
+antecipada aqui). Migrations V1→V5 validadas em banco limpo via
+Testcontainers (toda a suíte já faz isso a cada execução) e, nesta fase,
+também via `docker-compose.dev.yml` real (ver 18.9).
+
+**Backup**: `deploy/scripts/backup-db.sh` — `pg_dump --format=plain`
+comprimido (`gzip`), timestamp no nome, falha limpa em erro (remove
+arquivo parcial), retenção simples (últimos `KEEP_DAILY=7` backups
+diários), senha lida só de variável de ambiente (nunca aparece em `ps`).
+**Restore**: `deploy/scripts/restore-db.sh` — exige caminho do backup
+explícito e `CONFIRM_RESTORE=yes`; não faz `DROP`/`CREATE DATABASE`
+sozinho (decisão consciente do operador, não do script).
+
+### 18.9 Ciclo de backup/restore validado de verdade
+
+Diferente do resto desta seção, isto **foi executado nesta sessão**
+contra um Postgres real (`docker-compose.dev.yml`, não produção): subiu o
+container, rodou o JAR do backend contra ele (migrations aplicadas),
+registrou um usuário real via `curl` (dado real, não sintético), parou o
+backend, rodou `backup-db.sh`, criou um banco temporário separado
+(`sistema_financeiro_restore_test`), rodou `restore-db.sh` nele,
+confirmou que a contagem de usuários e as 5 migrations bateram
+exatamente com o banco original, removeu o banco temporário e o
+container. Resultado: ciclo funciona ponta a ponta.
+
+### 18.10 systemd
+
+`deploy/systemd/sistema-financeiro.service`: usuário dedicado não-root
+(`sistema-financeiro`), `EnvironmentFile` fora do repo
+(`/etc/sistema-financeiro/app.env`, `0600`), `Restart=on-failure`,
+journald como destino de log, flags de JVM conservadoras da seção 12.1
+(medição real ainda pendente — seção 12.2), endurecimento básico do
+sandbox systemd (`NoNewPrivileges`, `PrivateTmp`, `ProtectSystem=strict`,
+`ProtectHome`) que não restringe nada que a aplicação precise fazer.
+`server.shutdown=graceful` (Spring, `application.yml`) dá tempo de
+requisições em voo terminarem antes do processo sair — validado
+localmente via `kill` do processo e observação do log de graceful
+shutdown.
+
+### 18.11 Nginx
+
+`deploy/nginx/sistema-financeiro.conf`: redirect HTTP→HTTPS, SPA fallback
+(`try_files ... /index.html`, sem aplicar sobre `/api`), proxy `/api`
+com `X-Real-IP`/`X-Forwarded-For`/`X-Forwarded-Proto`/`Host` corretos,
+cache longo e imutável para assets com hash (`/assets/`), `index.html`
+nunca cacheado, gzip para texto/JSON/SVG. Preparado para Certbot
+(`ssl_certificate`/`ssl_certificate_key` nos caminhos padrão que
+`certbot --nginx` gera).
+
+### 18.12 Deploy e rollback
+
+`deploy/scripts/deploy.sh`: não builda nada (build acontece fora da VM,
+seção 14) — recebe JAR + `dist/` prontos, guarda o JAR anterior como
+`app.jar.previous`, publica o frontend em um diretório de release novo e
+troca o symlink `current` atomicamente, reinicia o `systemd`, espera o
+healthcheck responder `UP`, valida (`nginx -t`) e recarrega o Nginx.
+Rollback documentado para backend (JAR anterior) e frontend (symlink
+anterior) — **rollback de banco não é automático**: migrations Flyway não
+são reversíveis por padrão, então reverter a aplicação depois de uma
+migration só é seguro se a migration for estritamente aditiva/compatível;
+caso contrário a opção real é restaurar um backup anterior (seção 18.8),
+não um "desfazer" mágico.
+
+### 18.13 Limitações conhecidas desta fase
+
+Nenhuma vulnerabilidade CRITICAL/HIGH encontrada na auditoria final. A VM
+real (`167.234.233.150`) já foi inspecionada via SSH, mas o deploy ainda
+não foi aplicado nela: Nginx/HTTPS/firewall/systemd deste domínio nunca
+rodaram de fato, só os templates foram produzidos e revisados; consumo de
+memória real não foi medido (seção 12.2 continua pendente); o smoke test
+de produção (`DEPLOYMENT.md`, seção Smoke test) é um checklist para o
+operador rodar após o primeiro deploy real, não algo já executado. O
+teste do IP real atrás de proxy só cobre o caminho confiável (127.0.0.1)
+— a garantia do caminho não-confiável vem do mecanismo padrão do Tomcat,
+não de um teste deste projeto.

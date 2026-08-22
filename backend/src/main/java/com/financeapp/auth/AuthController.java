@@ -82,9 +82,14 @@ public class AuthController {
         return value == null ? "unknown" : value;
     }
 
-    // getRemoteAddr() (não X-Forwarded-For): não há proxy reverso confiável
-    // nesta fase (fica para a Fase 10), então confiar num header vindo do
-    // próprio cliente permitiria burlar o rate limit trivialmente.
+    // getRemoteAddr() continua sendo a fonte, mas em produção (perfil prod)
+    // seu valor já vem reescrito pelo Tomcat RemoteIpValve com o IP real do
+    // cliente lido de X-Forwarded-For — e só quando a conexão TCP direta vem
+    // do proxy confiável (server.tomcat.remoteip.internal-proxies=127.0.0.1,
+    // ou seja, o Nginx local). Uma requisição vinda de qualquer outro
+    // endereço tem esse header ignorado, então não dá pra forjar o IP
+    // simplesmente mandando o header pela internet. Ver application-prod.yml
+    // e ARCHITECTURE.md (Fase 10, IP real/rate limiter).
     private String clientIp(HttpServletRequest request) {
         return request.getRemoteAddr();
     }

@@ -1,0 +1,62 @@
+[Unit]
+Description=Sistema Financeiro - backend (Spring Boot)
+# Precisa do Postgres já disponível (rede local ou container do próprio
+# operador) antes de subir — ajuste "After"/"Requires" se o Postgres desta
+# VM também for gerenciado por systemd/docker aqui.
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+
+# Usuário/grupo dedicados, sem privilégio nenhum além de ler o JAR e o
+# próprio WorkingDirectory — nunca rodar como root. Operador cria com:
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin sistema-financeiro
+User=sistema-financeiro
+Group=sistema-financeiro
+
+WorkingDirectory=/opt/sistema-financeiro
+
+# EnvironmentFile fica fora do repositório, com permissão 0600 — ver
+# deploy/app.env.example para as variáveis esperadas e DEPLOYMENT.md para
+# o procedimento completo.
+EnvironmentFile=/etc/sistema-financeiro/app.env
+Environment=SPRING_PROFILES_ACTIVE=prod
+
+# Flags de JVM: ponto de partida conservador documentado em
+# ARCHITECTURE.md §12 (medição real de RSS ainda pendente — o operador
+# precisa validar antes de considerar esses valores definitivos; ver
+# DEPLOYMENT.md, seção "Consumo de memória").
+ExecStart=/usr/bin/java \
+  -Xms64m -Xmx256m \
+  -XX:+UseSerialGC \
+  -XX:MaxMetaspaceSize=128m \
+  -XX:ReservedCodeCacheSize=64m \
+  -Xss512k \
+  -jar /opt/sistema-financeiro/app.jar
+
+Restart=on-failure
+RestartSec=5
+
+# Graceful shutdown do Spring (server.shutdown=graceful, application.yml)
+# já dá tempo pra requisições em voo terminarem — TimeoutStopSec só evita
+# que o systemd espere indefinidamente se algo travar.
+TimeoutStopSec=25
+
+# journald como destino de log (stdout/stderr do processo) — ver
+# DEPLOYMENT.md, seção Logs, para os comandos de consulta (journalctl).
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=sistema-financeiro
+
+# Endurecimento básico do sandbox systemd — não impede nada que a
+# aplicação precise fazer (só lê o JAR/env, escreve nada em disco além de
+# logs via journald), então é "grátis" em termos de risco operacional.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/sistema-financeiro
+
+[Install]
+WantedBy=multi-user.target

@@ -15,6 +15,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -41,7 +42,11 @@ public class SecurityConfig {
             "/api/auth/register",
             "/api/auth/login",
             "/api/auth/refresh",
-            "/api/auth/logout"
+            "/api/auth/logout",
+            // Healthcheck de infra (systemd/monitoramento) — não pode exigir
+            // sessão. Só expõe status UP/DOWN: management.endpoint.health.show-details
+            // = never (application.yml) garante que nenhum detalhe interno vaza.
+            "/actuator/health"
     };
 
     private final JwtService jwtService;
@@ -68,6 +73,21 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
                         .csrfTokenRequestHandler(csrfRequestHandler)
+                )
+                // Fase 10 §23-24: a API só devolve JSON, nunca HTML/script — CSP
+                // restritiva por padrão (default-src/frame-ancestors 'none'). O CSP
+                // "de verdade" (permitindo o bundle React/Recharts) é responsabilidade
+                // do Nginx, que serve o HTML/assets estáticos — evita headers
+                // duplicados/conflitantes entre as duas camadas (ver DEPLOYMENT.md).
+                // X-Content-Type-Options/Cache-Control/X-Frame-Options e HSTS
+                // (só sobre HTTPS) já vêm habilitados por padrão pelo Spring Security.
+                .headers(headers -> headers
+                        .contentSecurityPolicy(csp -> csp.policyDirectives(
+                                "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"))
+                        .referrerPolicy(referrer -> referrer
+                                .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        .permissionsPolicy(permissions -> permissions
+                                .policy("geolocation=(), microphone=(), camera=()"))
                 )
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth

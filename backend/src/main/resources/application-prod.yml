@@ -1,12 +1,43 @@
-# Perfil de produção. Nenhum valor sensível tem default aqui de propósito:
-# a aplicação falha ao subir (fail-fast) se DB_URL, DB_USERNAME, DB_PASSWORD
-# ou JWT_SECRET não forem fornecidos via variável de ambiente do systemd unit.
+# Perfil de produção (SPRING_PROFILES_ACTIVE=prod) — ativado pelo
+# deploy/systemd/sistema-financeiro.service. Nenhum valor sensível tem
+# default aqui de propósito: a aplicação falha ao subir (fail-fast) se
+# DB_URL, DB_USERNAME, DB_PASSWORD ou JWT_SECRET não forem fornecidos via
+# variável de ambiente (deploy/app.env.example); nada aqui é segredo.
 app:
   cookie:
     secure: ${COOKIE_SECURE:true}
 
+# server.address restringe o backend a localhost: o único ponto público é o
+# Nginx (deploy/nginx/sistema-financeiro.conf), que faz proxy de /api para
+# esta porta. SERVER_PORT deve ser escolhida pelo operador só depois de
+# checar portas já em uso na VM real (ver DEPLOYMENT.md) — não é assumida
+# aqui.
+server:
+  address: 127.0.0.1
+
+  # Fase 10 §18 — a peça mais importante deste arquivo: sem isto, getRemoteAddr()
+  # sempre retornaria o IP do Nginx (127.0.0.1) e o AuthRateLimiter colapsaria
+  # todos os usuários no mesmo bucket. "native" ativa o RemoteIpValve do
+  # Tomcat, que só honra X-Forwarded-For/X-Forwarded-Proto quando a conexão
+  # TCP direta vem de um endereço da allowlist internal-proxies — qualquer
+  # outra origem tem o header ignorado (não é possível forjar o IP mandando
+  # o header direto pela internet). Como o Nginx roda na mesma máquina
+  # (mesmo namespace de rede), 127.0.0.1 é o único proxy confiável.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: 127\.0\.0\.1
+      remote-ip-header: X-Forwarded-For
+      protocol-header: X-Forwarded-Proto
+
+# Produção: nível INFO por padrão, sem DEBUG de Security/Hibernate SQL (log
+# de query SQL em produção é ruído + risco de vazar dado sensível em texto).
+# Ajustável via LOGGING_LEVEL_ROOT/etc no app.env só para diagnóstico pontual.
 logging:
   level:
-    root: INFO
-    com.financeapp: INFO
-    org.springframework.security: WARN
+    root: ${LOGGING_LEVEL_ROOT:INFO}
+    com.financeapp: ${LOGGING_LEVEL_APP:INFO}
+    org.springframework.security: ${LOGGING_LEVEL_SECURITY:WARN}
+    org.hibernate.SQL: ${LOGGING_LEVEL_HIBERNATE_SQL:WARN}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level %logger{36} - %msg%n"

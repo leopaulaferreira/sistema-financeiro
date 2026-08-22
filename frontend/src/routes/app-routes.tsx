@@ -13,6 +13,9 @@ const DashboardPage = lazy(() => import('@/pages/dashboard-page').then((m) => ({
 const TransactionsPage = lazy(() => import('@/pages/transactions-page').then((m) => ({ default: m.TransactionsPage })))
 const AccountsPage = lazy(() => import('@/pages/accounts-page').then((m) => ({ default: m.AccountsPage })))
 const CategoriesPage = lazy(() => import('@/pages/categories-page').then((m) => ({ default: m.CategoriesPage })))
+const PaymentMethodsPage = lazy(() =>
+  import('@/pages/payment-methods-page').then((m) => ({ default: m.PaymentMethodsPage })),
+)
 const RecurringPage = lazy(() => import('@/pages/recurring-page').then((m) => ({ default: m.RecurringPage })))
 const BudgetsPage = lazy(() => import('@/pages/budgets-page').then((m) => ({ default: m.BudgetsPage })))
 const GoalsPage = lazy(() => import('@/pages/goals-page').then((m) => ({ default: m.GoalsPage })))
@@ -48,6 +51,7 @@ export function AppRoutes() {
             <Route path={paths.transactions} element={<TransactionsPage />} />
             <Route path={paths.accounts} element={<AccountsPage />} />
             <Route path={paths.categories} element={<CategoriesPage />} />
+            <Route path={paths.paymentMethods} element={<PaymentMethodsPage />} />
             <Route path={paths.recurring} element={<RecurringPage />} />
             <Route path={paths.budgets} element={<BudgetsPage />} />
             <Route path={paths.goals} element={<GoalsPage />} />
