@@ -1134,8 +1134,9 @@ testar):
    final escolhido) neste documento quando a validação for feita, para que
    a decisão fique rastreável.
 
-**Ainda não medido** (Fase 10, seção 18): a sessão que implementou o
-deploy definitivo não teve acesso a uma VM de produção real, então
+**Ainda não medido** (Fase 10, seção 18): a VM real escolhida para o
+deploy (`167.234.233.150`, ver seção 18) já foi inspecionada via SSH,
+mas o deploy em si ainda não foi aplicado nela, então
 `deploy/systemd/sistema-financeiro.service` usa exatamente os valores
 conservadores desta seção como ponto de partida, não como valor
 definitivo. Este processo de medição continua pendente — é a primeira
@@ -1411,15 +1412,23 @@ não sobrevive a múltiplas instâncias do backend.
 
 ## 18. Deploy, Hardening e Observabilidade — Fase 10
 
-**Restrição desta fase**: a sessão que implementou o que segue não teve
-acesso SSH nem credenciais a nenhuma VM de produção real. Tudo que
-dependeria de infraestrutura real (instalar Nginx de verdade, emitir
-certificado, medir RSS em produção, testar firewall) foi produzido como
-**template versionado** em `deploy/` + procedimento documentado em
-`DEPLOYMENT.md`, para o operador aplicar manualmente. O que é lógica de
-código (perfil `prod`, IP real atrás de proxy, Actuator, CSP da API) foi
-implementado e testado de verdade nesta sessão; o que é infraestrutura
-(systemd/Nginx/HTTPS/firewall reais) não foi.
+**Estado real desta fase**: houve inspeção real (SSH, somente leitura) de
+duas VMs candidatas para hospedar este deploy:
+- `147.15.127.35` — já hospeda o projeto GridPulse; descartada por
+  restrição de memória disponível.
+- `167.234.233.150` — identificada como a VM adequada: tem Nginx nativo
+  já instalado e já hospeda outros projetos do usuário.
+
+Essa inspeção não é o mesmo que o deploy em si — **o deploy do
+sistema-financeiro ainda não foi aplicado nem validado em nenhuma VM**.
+Tudo que dependeria disso (instalar/configurar o Nginx de verdade para
+este domínio, emitir certificado, medir RSS em produção, testar
+firewall) continua produzido como **template versionado** em `deploy/` +
+procedimento documentado em `DEPLOYMENT.md`, para o operador aplicar em
+`167.234.233.150`. O que é lógica de código (perfil `prod`, IP real atrás
+de proxy, Actuator, CSP da API) foi implementado e testado de verdade
+nesta sessão; o que é infraestrutura (systemd/Nginx/HTTPS/firewall reais
+deste domínio) ainda não.
 
 ### 18.1 Arquitetura de produção
 
@@ -1590,11 +1599,12 @@ não um "desfazer" mágico.
 
 ### 18.13 Limitações conhecidas desta fase
 
-Nenhuma vulnerabilidade CRITICAL/HIGH encontrada na auditoria final. Sem
-acesso a infraestrutura real: Nginx/HTTPS/firewall/systemd nunca rodaram
-de fato, só os templates foram produzidos e revisados; consumo de memória
-real não foi medido (seção 12.2 continua pendente); o smoke test de
-produção (`DEPLOYMENT.md`, seção Smoke test) é um checklist para o
+Nenhuma vulnerabilidade CRITICAL/HIGH encontrada na auditoria final. A VM
+real (`167.234.233.150`) já foi inspecionada via SSH, mas o deploy ainda
+não foi aplicado nela: Nginx/HTTPS/firewall/systemd deste domínio nunca
+rodaram de fato, só os templates foram produzidos e revisados; consumo de
+memória real não foi medido (seção 12.2 continua pendente); o smoke test
+de produção (`DEPLOYMENT.md`, seção Smoke test) é um checklist para o
 operador rodar após o primeiro deploy real, não algo já executado. O
 teste do IP real atrás de proxy só cobre o caminho confiável (127.0.0.1)
 — a garantia do caminho não-confiável vem do mecanismo padrão do Tomcat,

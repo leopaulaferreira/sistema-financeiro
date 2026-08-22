@@ -4,11 +4,23 @@ Procedimento operacional para colocar a aplicação em produção. Este
 documento assume uma VM Linux pequena, compartilhada com outros projetos
 (ver ARCHITECTURE.md §12–§13), com acesso SSH de um operador humano.
 
-**Nenhum dos comandos abaixo foi executado contra uma VM real** — esta
-sessão não teve acesso a nenhuma infraestrutura de produção. Os templates
-em `deploy/` foram criados e o backend/frontend foram validados localmente
-(build, testes, ciclo real de backup→restore contra Postgres local). Todo
-comando marcado como "executar na VM" é responsabilidade do operador.
+**Inspeção real já feita, deploy ainda não.** Houve acesso SSH real
+(somente leitura) a duas VMs candidatas para avaliar onde hospedar esta
+aplicação:
+- `147.15.127.35` — já hospeda o projeto GridPulse; descartada para este
+  deploy por restrição de memória disponível.
+- `167.234.233.150` — identificada como a VM adequada para este deploy:
+  tem Nginx nativo já instalado e já hospeda outros projetos do usuário.
+
+Essa inspeção não deve ser confundida com o deploy em si: **os comandos
+abaixo ainda não foram executados contra `167.234.233.150`** (nem contra
+nenhuma outra VM) — continuam sendo o procedimento a seguir, não um
+registro do que já rodou. Este documento só deve dizer que o deploy foi
+concluído depois que os passos abaixo tiverem sido de fato aplicados e
+validados na VM real. Os templates em `deploy/` foram criados e o
+backend/frontend foram validados localmente (build, testes, ciclo real de
+backup→restore contra Postgres local, fora da VM). Todo comando marcado
+como "executar na VM" continua responsabilidade do operador.
 
 ## 1. Pré-requisitos
 
@@ -295,7 +307,9 @@ que existe.
 
 ## Consumo de memória
 
-**Não medido em produção real nesta sessão** (sem acesso à VM). O
+**Não medido em produção real ainda** (a VM real — `167.234.233.150` —
+já foi inspecionada, mas o deploy em si ainda não rodou lá, então não há
+processo real para medir). O
 `.service` usa o ponto de partida conservador já documentado em
 ARCHITECTURE.md §12.1 (`-Xms64m -Xmx256m`, `SerialGC`, `MaxMetaspaceSize=128m`,
 `ReservedCodeCacheSize=64m`, `Xss512k`) — são valores de partida
