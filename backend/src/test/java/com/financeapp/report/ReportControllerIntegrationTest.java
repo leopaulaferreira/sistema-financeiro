@@ -306,6 +306,25 @@ class ReportControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void exportCsv_descriptionStartingWithFormulaTrigger_isNeutralizedInOutput() throws Exception {
+        // SEC-011: description começando com "=" chega intacta até csvField
+        // (só é aparada por trim() nas pontas, e "=" não é whitespace) — o
+        // export final não pode conter a fórmula "nua", nem seu resultado.
+        Fixture f = setUpFixture("rep-csv-injection");
+        createTransaction(f.session(), new TransactionRequest("=1+1", new BigDecimal("10.00"), TransactionType.EXPENSE,
+                LocalDate.of(2026, 8, 5), f.expense().id(), f.checking().id(), f.pix().id(), null));
+
+        org.springframework.test.web.servlet.MvcResult result = mockMvc.perform(authed(get("/api/reports/export.csv")
+                        .param("from", "2026-08-01").param("to", "2026-09-01"), f.session()))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String csv = result.getResponse().getContentAsString(java.nio.charset.StandardCharsets.UTF_8);
+        org.assertj.core.api.Assertions.assertThat(csv).contains("'=1+1");
+        org.assertj.core.api.Assertions.assertThat(csv).doesNotContain(",=1+1,");
+    }
+
+    @Test
     void exportCsv_withCategoryFromAnotherUser_returns404() throws Exception {
         Fixture f = setUpFixture("rep-csv-cross");
         Fixture other = setUpFixture("rep-csv-cross-other");

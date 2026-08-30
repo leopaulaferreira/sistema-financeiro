@@ -300,11 +300,29 @@ public class ReportService {
         return "%04d-%02d".formatted(date.getYear(), date.getMonthValue());
     }
 
-    private static String csvField(String value) {
+    /**
+     * SEC-011: valores controlados pelo usuário que comecem com um dos
+     * gatilhos de fórmula abaixo são interpretados como fórmula (não como
+     * texto) por Excel/LibreOffice ao abrir o CSV. Prefixar com apóstrofo
+     * neutraliza sem apagar/alterar o conteúdo original — aplicado antes do
+     * escaping RFC 4180 já existente (vírgula/aspas/quebra de linha), que
+     * continua tratando o valor (agora prefixado) normalmente.
+     */
+    private static final String FORMULA_TRIGGER_CHARS = "=+-@\t\r";
+
+    // Visibilidade de pacote (não private) só para permitir teste unitário
+    // direto dos gatilhos de fórmula (SEC-011) — nenhuma outra classe do
+    // pacote usa isto além de ReportService/exportCsv.
+    static String csvField(String value) {
         if (value == null) return "";
-        boolean needsQuoting = value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r");
-        String escaped = value.replace("\"", "\"\"");
+        String safeValue = needsFormulaNeutralization(value) ? "'" + value : value;
+        boolean needsQuoting = safeValue.contains(",") || safeValue.contains("\"") || safeValue.contains("\n") || safeValue.contains("\r");
+        String escaped = safeValue.replace("\"", "\"\"");
         return needsQuoting ? "\"" + escaped + "\"" : escaped;
+    }
+
+    private static boolean needsFormulaNeutralization(String value) {
+        return !value.isEmpty() && FORMULA_TRIGGER_CHARS.indexOf(value.charAt(0)) >= 0;
     }
 
     private static BigDecimal nz(BigDecimal value) {
