@@ -34,8 +34,12 @@
   --accent-secondary: oklch(0.78 0.12 210);
   --accent-secondary-foreground: oklch(0.16 0.014 265);
 
-  --primary: var(--accent-primary);
-  --primary-foreground: var(--accent-primary-foreground);
+  /* Ações primárias usam um violeta mais profundo que o accent informativo.
+     Isso mantém CTAs sólidos e legíveis sem contaminar gráficos e navegação. */
+  --primary: oklch(0.56 0.215 292);
+  --primary-hover: oklch(0.605 0.215 292);
+  --primary-pressed: oklch(0.515 0.205 292);
+  --primary-foreground: oklch(0.99 0 0);
   --secondary: var(--surface-hover);
   --secondary-foreground: var(--foreground);
 
