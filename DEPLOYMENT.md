@@ -182,6 +182,14 @@ sudo nginx -t          # NUNCA reload com config inválida
 sudo systemctl reload nginx
 ```
 
+**SEC-015 (limite de tamanho de corpo de requisição):** nem o Nginx nem o
+backend declaram um `client_max_body_size`/limite próprio explícito — a
+proteção real vem do default implícito do Nginx (~1MB por requisição), não
+de uma configuração deliberada. Suficiente para o payload atual da API
+(nenhum endpoint aceita upload de arquivo), mas documentado aqui em vez de
+depender de um default implícito não declarado — se um endpoint de upload
+for adicionado no futuro, revisitar este limite explicitamente.
+
 ## 12. SSL (Certbot/Let's Encrypt)
 
 ```bash

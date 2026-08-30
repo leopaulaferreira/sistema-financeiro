@@ -25,6 +25,11 @@ public class JwtService {
     private static final String CLAIM_EMAIL = "email";
     private static final int MIN_SECRET_BYTES = 32; // 256 bits, mínimo exigido para HS256
 
+    // SEC-006: irrelevante hoje (instância única, mesmo relógio de emissão/
+    // validação), mas evita 401 espúrio por `exp`/`iat` se o backend algum
+    // dia escalar horizontalmente com relógios não perfeitamente sincronizados.
+    private static final long CLOCK_SKEW_SECONDS = 30;
+
     private final SecretKey key;
     private final JwtProperties properties;
 
@@ -66,6 +71,7 @@ public class JwtService {
         try {
             Claims claims = Jwts.parser()
                     .verifyWith(key)
+                    .clockSkewSeconds(CLOCK_SKEW_SECONDS)
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();

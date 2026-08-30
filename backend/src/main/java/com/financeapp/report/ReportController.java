@@ -32,15 +32,18 @@ import java.util.List;
 public class ReportController {
 
     private final ReportService reportService;
+    private final ReportRateLimiter rateLimiter;
 
-    public ReportController(ReportService reportService) {
+    public ReportController(ReportService reportService, ReportRateLimiter rateLimiter) {
         this.reportService = reportService;
+        this.rateLimiter = rateLimiter;
     }
 
     @GetMapping("/summary")
     public FinancialSummaryResponse summary(@AuthenticationPrincipal AuthenticatedUser principal,
                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.summary(principal.id(), from, to);
     }
 
@@ -50,6 +53,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "DAY") Granularity granularity) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.incomeVsExpense(principal.id(), from, to, granularity);
     }
 
@@ -57,6 +61,7 @@ public class ReportController {
     public List<CategoryReportResponse> expensesByCategory(@AuthenticationPrincipal AuthenticatedUser principal,
                                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                              @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.expensesByCategory(principal.id(), from, to);
     }
 
@@ -64,6 +69,7 @@ public class ReportController {
     public List<CategoryReportResponse> incomeByCategory(@AuthenticationPrincipal AuthenticatedUser principal,
                                                            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.incomeByCategory(principal.id(), from, to);
     }
 
@@ -71,6 +77,7 @@ public class ReportController {
     public List<AccountFlowResponse> accountsFlow(@AuthenticationPrincipal AuthenticatedUser principal,
                                                     @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                     @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.accountsFlow(principal.id(), from, to);
     }
 
@@ -78,12 +85,14 @@ public class ReportController {
     public List<BalancePointResponse> balanceEvolution(@AuthenticationPrincipal AuthenticatedUser principal,
                                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                          @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.balanceEvolution(principal.id(), from, to);
     }
 
     @GetMapping("/monthly-comparison")
     public List<MonthlyComparisonResponse> monthlyComparison(@AuthenticationPrincipal AuthenticatedUser principal,
                                                                @RequestParam(defaultValue = "6") @Min(1) @Max(24) int months) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.monthlyComparison(principal.id(), months);
     }
 
@@ -92,6 +101,7 @@ public class ReportController {
                                                    @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                    @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                                    @RequestParam(defaultValue = "10") @Min(1) @Max(50) int limit) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.topExpenses(principal.id(), from, to, limit);
     }
 
@@ -100,6 +110,7 @@ public class ReportController {
                                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                  @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
                                                  @RequestParam(defaultValue = "10") @Min(1) @Max(50) int limit) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.topIncome(principal.id(), from, to, limit);
     }
 
@@ -107,6 +118,7 @@ public class ReportController {
     public List<PaymentMethodReportResponse> paymentMethods(@AuthenticationPrincipal AuthenticatedUser principal,
                                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
                                                               @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        rateLimiter.checkAllowed(principal.id());
         return reportService.paymentMethods(principal.id(), from, to);
     }
 
@@ -117,6 +129,7 @@ public class ReportController {
                                              @RequestParam(required = false) TransactionType type,
                                              @RequestParam(required = false) Long categoryId,
                                              @RequestParam(required = false) Long accountId) {
+        rateLimiter.checkAllowed(principal.id());
         byte[] csv = reportService.exportCsv(principal.id(), from, to, type, categoryId, accountId);
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType("text/csv;charset=UTF-8"))

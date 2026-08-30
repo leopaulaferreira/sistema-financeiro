@@ -6,6 +6,7 @@ import com.financeapp.auth.dto.UserResponse;
 import com.financeapp.common.exception.DuplicateResourceException;
 import com.financeapp.common.exception.InvalidCredentialsException;
 import com.financeapp.common.exception.InvalidTokenException;
+import com.financeapp.common.exception.InvalidTransactionException;
 import com.financeapp.common.exception.ResourceNotFoundException;
 import com.financeapp.user.User;
 import com.financeapp.user.UserRepository;
@@ -13,8 +14,17 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
+
 @Service
 public class AuthService {
+
+    // SEC-004: BCrypt processa só os primeiros 72 BYTES; @Size(max=72) em
+    // RegisterRequest conta caracteres. Senha com acentos/emoji pode passar
+    // no @Size e ainda assim exceder 72 bytes, tendo a "cauda" truncada
+    // silenciosamente pelo hash — checado aqui porque Bean Validation isolado
+    // no DTO não tem como saber o encoding pretendido.
+    private static final int MAX_PASSWORD_BYTES = 72;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -42,6 +52,10 @@ public class AuthService {
         String normalizedEmail = request.email().trim().toLowerCase();
         if (userRepository.existsByEmail(normalizedEmail)) {
             throw new DuplicateResourceException("Já existe uma conta com este e-mail");
+        }
+        if (request.password().getBytes(StandardCharsets.UTF_8).length > MAX_PASSWORD_BYTES) {
+            throw new InvalidTransactionException(
+                    "Senha excede o limite de 72 bytes — caracteres acentuados ou emoji ocupam mais de 1 byte cada");
         }
         User user = new User(request.name().trim(), normalizedEmail, passwordEncoder.encode(request.password()));
         userRepository.save(user);

@@ -127,6 +127,24 @@ class AuthControllerIntegrationTest {
                 .andExpect(status().isForbidden());
     }
 
+    /**
+     * SEC-004: BCrypt trunca em 72 BYTES, mas @Size(max=72) em RegisterRequest
+     * conta caracteres — uma senha com muitos caracteres multi-byte (acentos)
+     * pode ficar sob o limite de caracteres e ainda assim exceder 72 bytes.
+     * "é" ocupa 2 bytes em UTF-8: 40 caracteres = 80 bytes, > 72.
+     */
+    @Test
+    void registerWithPasswordExceeding72Bytes_returns400() throws Exception {
+        Cookie csrf = fetchCsrfCookie();
+        String passwordOver72Bytes = "é".repeat(40);
+        RegisterRequest request = new RegisterRequest("Ana Acentos", "acentos@example.com", passwordOver72Bytes);
+
+        mockMvc.perform(withCsrf(post("/api/auth/register"), csrf)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void registerWithDuplicateEmail_returns409() throws Exception {
         Cookie csrf = fetchCsrfCookie();

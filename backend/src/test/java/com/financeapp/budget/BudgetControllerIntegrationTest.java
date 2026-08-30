@@ -65,6 +65,18 @@ class BudgetControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.category.name").value("Alimentação"));
     }
 
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void create_withAmountExceedingPrecision_returns400() throws Exception {
+        Fixture f = setUpFixture("bud-precision");
+        YearMonth period = YearMonth.now();
+
+        mockMvc.perform(authed(post("/api/budgets"), f.session())
+                        .contentType(APPLICATION_JSON)
+                        .content(createBudgetJson(f.expense().id(), period.getYear(), period.getMonthValue(), "12345678901.23")))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void create_withIncomeCategory_returns400() throws Exception {
         Fixture f = setUpFixture("bud-income-cat");
