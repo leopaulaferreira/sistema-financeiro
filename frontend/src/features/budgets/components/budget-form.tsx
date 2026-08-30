@@ -175,7 +175,7 @@ export function BudgetForm({ budget, defaultYear, defaultMonth, onSuccess, onCan
         </Field>
       </div>
 
-      {formError && <p className="text-xs text-danger">{formError}</p>}
+      {formError && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{formError}</p>}
 
       <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
         <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onCancel} disabled={submitting}>
