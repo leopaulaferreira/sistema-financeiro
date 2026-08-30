@@ -29,35 +29,43 @@ export function TransactionTable({ transactions, compact = false, onEdit, onDele
   const showActions = !compact && (onEdit || onDelete)
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-border">
+    <div className="overflow-hidden rounded-xl border border-border-strong">
       <Table>
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead>Descrição</TableHead>
-            <TableHead>Categoria</TableHead>
-            {!compact && <TableHead>Conta</TableHead>}
-            <TableHead>Data</TableHead>
+            <TableHead className="hidden sm:table-cell">Categoria</TableHead>
+            {!compact && <TableHead className="hidden lg:table-cell">Conta</TableHead>}
+            <TableHead className="hidden md:table-cell">Data</TableHead>
             <TableHead className="text-right">Valor</TableHead>
             {showActions && <TableHead className="w-0" />}
           </TableRow>
         </TableHeader>
         <TableBody>
           {transactions.map((t) => (
-            <TableRow key={t.id}>
-              <TableCell className="max-w-[220px] truncate font-medium text-foreground">{t.description}</TableCell>
-              <TableCell>
+            <TableRow key={t.id} className="group/transaction">
+              <TableCell className="max-w-[240px]">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <span className="truncate font-medium text-foreground">{t.description}</span>
+                  <span className="text-xs text-text-tertiary md:hidden">{formatDate(t.date)}</span>
+                  <Badge variant="outline" className="w-fit border-border font-normal text-text-secondary sm:hidden">
+                    {t.categoryName}
+                  </Badge>
+                </div>
+              </TableCell>
+              <TableCell className="hidden sm:table-cell">
                 <Badge variant="outline" className="border-border font-normal text-text-secondary">
                   {t.categoryName}
                 </Badge>
               </TableCell>
-              {!compact && <TableCell className="text-text-secondary">{t.accountName}</TableCell>}
-              <TableCell className="whitespace-nowrap text-text-secondary">{formatDate(t.date)}</TableCell>
+              {!compact && <TableCell className="hidden text-text-secondary lg:table-cell">{t.accountName}</TableCell>}
+              <TableCell className="hidden whitespace-nowrap text-text-secondary md:table-cell">{formatDate(t.date)}</TableCell>
               <TableCell className="text-right">
                 <Amount value={t.amount} type={t.type} />
               </TableCell>
               {showActions && (
                 <TableCell className="text-right">
-                  <div className="flex justify-end gap-1">
+                  <div className="flex justify-end gap-1 opacity-80 transition-opacity duration-150 group-hover/transaction:opacity-100 group-focus-within/transaction:opacity-100">
                     {onEdit && (
                       <Button
                         variant="ghost"

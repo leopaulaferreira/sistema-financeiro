@@ -34,16 +34,16 @@ export function PaymentMethodList({ paymentMethods, onEdit, onDelete }: PaymentM
   }
 
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col divide-y divide-border/70">
       {paymentMethods.map((paymentMethod) => {
         const { icon: Icon, colorVar } = paymentMethodTypeStyle[paymentMethod.type]
         return (
           <li
             key={paymentMethod.id}
-            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+            className="group/list-item -mx-2 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-surface-hover/55"
           >
             <div
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg"
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border"
               style={{ backgroundColor: `color-mix(in oklch, ${colorVar} 16%, transparent)`, color: colorVar }}
             >
               <Icon className="size-[18px]" aria-hidden />
