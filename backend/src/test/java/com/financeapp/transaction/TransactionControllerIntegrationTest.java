@@ -266,14 +266,15 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
         Fixture other = setUpFixture("tx-page-other");
         createTransaction(other, TransactionType.EXPENSE, BigDecimal.valueOf(999), LocalDate.of(2026, 8, 1));
 
-        MvcResult result = mockMvc.perform(authed(get("/api/transactions").param("page", "0").param("size", "2"), owner.session()))
+        // Isolamento checado pelo accountId da outra conta, não por um "doesNotContain" no
+        // corpo inteiro — esse valor (999) já apareceu por coincidência dentro de um
+        // createdAt (ex.: ".199972Z"), tornando o teste flaky sem nenhuma relação com bug real.
+        mockMvc.perform(authed(get("/api/transactions").param("page", "0").param("size", "2"), owner.session()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content.length()").value(2))
                 .andExpect(jsonPath("$.totalElements").value(3))
                 .andExpect(jsonPath("$.totalPages").value(2))
-                .andReturn();
-
-        assertThat(result.getResponse().getContentAsString()).doesNotContain("999");
+                .andExpect(jsonPath("$.content[?(@.accountId == %d)]".formatted(other.account().id())).isEmpty());
     }
 
     /** SEC-018: page negativo virava 500 (IllegalArgumentException em PageRequest.of), agora capado a 0. */
