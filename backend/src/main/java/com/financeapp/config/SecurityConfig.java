@@ -86,6 +86,15 @@ public class SecurityConfig {
                                 "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"))
                         .referrerPolicy(referrer -> referrer
                                 .policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
+                        // SEC-016: sem isto, o Spring Security aplica seu default
+                        // (max-age=31536000; includeSubDomains), que diverge do HSTS
+                        // deliberadamente conservador do Nginx (max-age=15552000, sem
+                        // includeSubDomains — decisão documentada em
+                        // deploy/nginx/sistema-financeiro.conf por não haver garantia
+                        // de que outros subdomínios da VM tenham HTTPS válido).
+                        .httpStrictTransportSecurity(hsts -> hsts
+                                .includeSubDomains(false)
+                                .maxAgeInSeconds(15_552_000))
                         .permissionsPolicy(permissions -> permissions
                                 .policy("geolocation=(), microphone=(), camera=()"))
                 )
