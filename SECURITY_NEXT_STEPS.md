@@ -1,7 +1,8 @@
 # Security — Handoff para Remediação (P1)
 
 **Data:** 2026-08-30
-**Objetivo deste arquivo:** retomar o trabalho de remediação amanhã sem precisar reexplicar contexto. Este documento não corrige nada — é só o estado da auditoria e o plano de ataque para a fase de hardening.
+**Atualização (2026-08-30, mesmo dia):** fase P1 **concluída** na branch `security/hardening-p1` — SEC-005, SEC-011 e SEC-001 corrigidos e testados; SEC-002 avaliado e deferido deliberadamente para P2 (justificativa em `SECURITY_AUDIT.md`, seção 9). PR aberta contra `main`, sem merge. Ver seção 10 (nova) para o resultado completo.
+**Objetivo original deste arquivo:** retomar o trabalho de remediação sem precisar reexplicar contexto. Este documento não corrige nada — é só o estado da auditoria e o plano de ataque para a fase de hardening (mantido abaixo como registro histórico do planejamento).
 
 ---
 
@@ -129,5 +130,16 @@ Se algo em LOW/INFO for tentador de corrigir "já que está mexendo no arquivo" 
 
 ## 9. Status do push/PR
 
-- `docs/security-handoff` (este arquivo): commitado localmente. Push pendente — meu `git push` tende a ser bloqueado pelo classificador de auto mode; rode manualmente ou aprove o prompt de permissão quando aparecer.
-- Nenhuma outra branch de código foi criada ainda. `security/hardening-p1` **não existe** — é só uma sugestão de nome para amanhã, conforme pedido.
+- `docs/security-handoff`: já mesclada em `main` via PR #13.
+- `security/hardening-p1`: criada a partir de `main` já atualizado, com os 3 commits de correção (`cc88668`, `eada752`, `5144856`) mais um commit final de docs. Push feito, PR aberta contra `main`, **sem merge** (aguardando autorização explícita, conforme `CLAUDE.md`).
+
+---
+
+## 10. Resultado da remediação P1 (2026-08-30)
+
+- **SEC-005** (race condition no refresh token): corrigido com `UPDATE` condicional atômico (`RefreshTokenRepository.revokeIfActive`). Teste de concorrência real com `CountDownLatch` contra Postgres via Testcontainers confirma exatamente 1 sucesso por par de chamadas simultâneas.
+- **SEC-011** (CSV Formula Injection): corrigido prefixando `'` nos 6 gatilhos (`=+-@`, tab, CR) antes do escaping RFC 4180 existente, num único helper centralizado. 13 testes unitários + 1 de integração ponta a ponta.
+- **SEC-001** (rate limiter sem eviction): `ConcurrentHashMap` trocado por Caffeine `Cache` com `maximumSize`/`expireAfterWrite`. Teste confirma que o cache não cresce indefinidamente e que a janela por IP continua funcionando.
+- **SEC-002** (força bruta distribuída por conta): **deferido deliberadamente** para P2, não implementado nesta fase. Motivo resumido (detalhe completo em `SECURITY_AUDIT.md` seção 9): uma implementação segura exige uma garantia de timing/mensagem idênticos entre "conta bloqueada"/"conta não existe"/"senha errada" difícil de validar com um teste automatizado não-flaky nesta fase, e o próprio limiar/janela de lockout é uma decisão de produto (risco de DoS contra usuário legítimo), não uma correção mecânica. Mitigação existente (BCrypt + rate limit por IP já com eviction) permanece.
+- Suíte completa do backend: verde (ver commit de docs final para o número exato de testes).
+- Nenhum finding LOW/INFO foi tocado nesta branch.
