@@ -30,8 +30,8 @@ export function AppLayout() {
       <div className="flex min-h-screen bg-background">
         <aside
           className={cn(
-            'sticky top-0 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 lg:block',
-            collapsed ? 'w-[72px]' : 'w-64',
+            'sticky top-0 hidden h-screen shrink-0 border-r border-sidebar-border bg-sidebar transition-[width] duration-200 ease-out lg:block',
+            collapsed ? 'w-20' : 'w-[17.5rem]',
           )}
         >
           <SidebarContent collapsed={collapsed} />
@@ -39,8 +39,8 @@ export function AppLayout() {
 
         <div className="flex min-w-0 flex-1 flex-col">
           <Topbar collapsed={collapsed} onToggleCollapsed={() => setCollapsed((c) => !c)} title={title} />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
-            <div className="mx-auto w-full max-w-[1600px]">
+          <main className="flex-1 px-4 py-6 sm:px-6 sm:py-8 lg:px-8 xl:px-10">
+            <div className="mx-auto w-full max-w-[1520px]">
               <Outlet />
             </div>
           </main>

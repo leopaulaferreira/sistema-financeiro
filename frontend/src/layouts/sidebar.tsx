@@ -25,17 +25,27 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
 
   return (
     <div className="flex h-full flex-col">
-      <div className={cn('flex h-16 shrink-0 items-center gap-2 px-4', collapsed && 'justify-center px-0')}>
-        <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-accent-primary/15 text-accent-primary">
-          <Wallet2 className="size-5" />
+      <div className={cn('flex h-[72px] shrink-0 items-center gap-3 px-5', collapsed && 'justify-center px-0')}>
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-accent-primary/20 bg-accent-primary/12 text-accent-primary shadow-[0_8px_20px_-12px_var(--accent-primary)]">
+          <Wallet2 className="size-[18px]" />
         </div>
-        {!collapsed && <span className="text-base font-semibold tracking-tight text-foreground">Finanças</span>}
+        {!collapsed && (
+          <span className="flex min-w-0 flex-col">
+            <span className="text-sm font-semibold tracking-[-0.01em] text-foreground">Finanças</span>
+            <span className="text-[0.6875rem] text-text-tertiary">Controle financeiro</span>
+          </span>
+        )}
       </div>
 
       <Separator className="opacity-60" />
 
-      <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-4">
-        <ul className="flex flex-col gap-1">
+      <nav className="flex-1 overflow-y-auto scrollbar-thin px-3 py-5">
+        {!collapsed && (
+          <p className="mb-2 px-3 text-[0.625rem] font-semibold tracking-[0.12em] text-text-tertiary uppercase">
+            Navegação
+          </p>
+        )}
+        <ul className="flex flex-col gap-1.5">
           {navItems.map((item) => (
             <li key={item.to}>
               <SidebarLink item={item} collapsed={collapsed} onNavigate={onNavigate} />
@@ -46,7 +56,7 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
 
       <Separator className="opacity-60" />
 
-      <div className="flex flex-col gap-1 px-3 py-3">
+      <div className="flex flex-col gap-1.5 px-3 py-4">
         <SidebarLink
           item={{ to: paths.settings, label: 'Configurações', icon: Settings }}
           collapsed={collapsed}
@@ -58,19 +68,19 @@ export function SidebarContent({ collapsed = false, onNavigate }: SidebarContent
             type="button"
             onClick={handleLogout}
             className={cn(
-              'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-text-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'flex min-h-11 w-full items-center gap-3 rounded-xl px-3 py-2 text-sm text-text-secondary transition-[color,background-color] duration-200 hover:bg-surface-hover/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45',
               collapsed && 'justify-center px-0',
             )}
           >
-            <Avatar className="size-7 shrink-0">
-              <AvatarFallback className="bg-accent-secondary/20 text-xs font-medium text-accent-secondary">
+            <Avatar className="size-8 shrink-0 border border-border-strong">
+              <AvatarFallback className="bg-accent-secondary/15 text-xs font-semibold text-accent-secondary">
                 {initials(user?.name ?? '?')}
               </AvatarFallback>
             </Avatar>
             {!collapsed && (
               <span className="flex min-w-0 flex-1 flex-col text-left">
                 <span className="truncate text-sm font-medium text-foreground">{user?.name}</span>
-                <span className="truncate text-xs text-text-secondary">{user?.email}</span>
+                <span className="truncate text-[0.6875rem] text-text-tertiary">{user?.email}</span>
               </span>
             )}
             {!collapsed && <LogOut className="size-4 shrink-0 text-text-secondary" aria-hidden />}
@@ -106,13 +116,13 @@ function SidebarLink({ item, collapsed, onNavigate }: SidebarLinkProps) {
       onClick={onNavigate}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-text-secondary transition-colors hover:bg-surface-hover hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+          'relative flex min-h-10 items-center gap-3 overflow-hidden rounded-xl px-3 py-2 text-sm font-medium text-text-secondary transition-[color,background-color] duration-200 hover:bg-surface-hover/65 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45',
           collapsed && 'justify-center px-0',
-          isActive && 'bg-accent-primary/12 text-accent-primary hover:bg-accent-primary/16 hover:text-accent-primary',
+          isActive && 'bg-accent-primary/12 text-accent-primary before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-full before:bg-accent-primary hover:bg-accent-primary/16 hover:text-accent-primary',
         )
       }
     >
-      <Icon className="size-[18px] shrink-0" aria-hidden />
+      <Icon className="size-[17px] shrink-0" aria-hidden />
       {!collapsed && <span className="truncate">{item.label}</span>}
     </NavLink>
   )
