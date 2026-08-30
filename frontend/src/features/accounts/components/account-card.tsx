@@ -20,11 +20,11 @@ export function AccountCard({ name, type, balance, active = true, onEdit, onTogg
   const isNegative = balance < 0
 
   return (
-    <Card className="border-border bg-surface py-0 shadow-none transition-colors hover:bg-surface-hover">
-      <CardContent className="flex items-start justify-between gap-3 p-5">
+    <Card className="py-0 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong">
+      <CardContent className="flex min-h-36 items-start justify-between gap-3 p-5">
         <div className="flex min-w-0 items-start gap-3">
           <div
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg"
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-border"
             style={{ backgroundColor: `color-mix(in oklch, ${colorVar} 16%, transparent)`, color: colorVar }}
           >
             <Icon className="size-[18px]" aria-hidden />
@@ -32,7 +32,7 @@ export function AccountCard({ name, type, balance, active = true, onEdit, onTogg
           <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate text-sm font-medium text-foreground">{name}</span>
             <span className="text-xs text-text-secondary">{accountTypeLabels[type]}</span>
-            <span className={cn('text-lg font-semibold tabular-nums', isNegative ? 'text-danger' : 'text-foreground')}>
+            <span className={cn('financial-value mt-1 text-xl font-semibold', isNegative ? 'text-danger' : 'text-foreground')}>
               {formatCurrency(balance)}
             </span>
           </div>

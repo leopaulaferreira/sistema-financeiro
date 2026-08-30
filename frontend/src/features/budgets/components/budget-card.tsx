@@ -15,12 +15,12 @@ interface BudgetCardProps {
 
 export function BudgetCard({ budget, onEdit, onDelete }: BudgetCardProps) {
   return (
-    <Card className="border-border bg-surface py-0 shadow-none transition-colors hover:bg-surface-hover">
-      <CardContent className="flex flex-col gap-3 p-5">
+    <Card className="py-0 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong">
+      <CardContent className="flex min-h-44 flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate text-sm font-medium text-foreground">{budget.category.name}</span>
-            <span className="text-xs tabular-nums text-text-secondary">
+            <span className="financial-value text-sm font-medium text-text-secondary">
               {formatCurrency(budget.spent)} / {formatCurrency(budget.amount)}
             </span>
           </div>
