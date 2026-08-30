@@ -293,6 +293,53 @@ recarrega o Nginx. **Se houve migration Flyway nova nesta versão**, ela já
 foi aplicada no startup do backend antes do healthcheck passar — não tem
 como "cancelar" isso automaticamente (ver §18).
 
+## 17b. Deploy automático (CD via GitHub Actions)
+
+Desde 2026-08-30, `.github/workflows/deploy.yml` automatiza o fluxo manual
+da §17 (build local, `scp`, SSH, `chown`, `nginx reload`) — eliminando a
+classe de erro humano que já causou incidente real (build de produção
+contaminado por `frontend/.env.local` residual, ver §"Troubleshooting").
+
+**Como disparar:** aba *Actions* do repositório no GitHub → workflow
+"Deploy" → **Run workflow**, escolhendo a branch/ref desejada (geralmente
+`main`, depois de já mesclada — este projeto não faz deploy automático a
+cada merge, é sempre um clique deliberado). O job builda backend+frontend
+do zero num runner limpo (elimina por construção o risco de `.env.local`
+contaminar o bundle — um checkout novo do GitHub nunca tem esse arquivo
+git-ignored), roda lint/test/build, faz uma checagem anti-contaminação no
+bundle final, envia os artefatos por SSH e executa o deploy na VM.
+
+**Credencial usada — NÃO é a chave pessoal do operador
+(`oracle-jan29.key`)**: existe um usuário Linux dedicado só para isso,
+`deploy-financeiro`, com uma chave `ed25519` própria guardada como secret
+do repositório (`DEPLOY_SSH_KEY`). Esse usuário **não tem sudo geral** —
+só pode, via `/etc/sudoers.d/deploy-financeiro`, rodar como root um único
+comando: `/bin/bash /tmp/sistema-financeiro-deploy-*/run-deploy.sh` (o
+wrapper que o próprio workflow gera e envia a cada execução). Se o secret
+do GitHub algum dia vazar, o dano fica contido a "redeployar esta app" —
+não dá shell arbitrário nem acesso aos outros projetos que dividem a VM
+(HubFlow, Running Insights, etc.). Ver `/etc/sudoers.d/deploy-financeiro`
+na VM para o texto exato da regra.
+
+**Diferença do fluxo manual da §17:** o healthcheck do próprio
+`deploy/scripts/deploy.sh` já tem timeout generoso (300s — ver comentário
+no script), então o workflow não deveria precisar do "conserto manual" de
+`chown`/`nginx reload` que era necessário quando o script antigo (60s)
+dava falso negativo — mas se algum dia isso acontecer de novo, os passos
+manuais de recuperação são os mesmos descritos no histórico deste arquivo
+antes desta seção existir: confirmar saúde via
+`curl http://127.0.0.1:8084/actuator/health` na VM, depois `sudo chown
+sistema-financeiro:sistema-financeiro /opt/sistema-financeiro/app.jar`,
+`sudo chown -R ubuntu:ubuntu` no release do frontend, `sudo nginx -t &&
+sudo systemctl reload nginx`.
+
+**Rotação/revogação da chave de deploy:** gerar um novo par
+(`ssh-keygen -t ed25519`), atualizar
+`/home/deploy-financeiro/.ssh/authorized_keys` na VM com a nova chave
+pública, atualizar o secret `DEPLOY_SSH_KEY` no GitHub
+(`gh secret set DEPLOY_SSH_KEY < nova_chave_privada`), remover a entrada
+antiga do `authorized_keys`.
+
 ## 18. Rollback
 
 **Backend**: `cp /opt/sistema-financeiro/app.jar.previous /opt/sistema-financeiro/app.jar && sudo systemctl restart sistema-financeiro`.

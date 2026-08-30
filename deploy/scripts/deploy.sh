@@ -56,13 +56,20 @@ echo "[deploy] === restart backend ==="
 sudo systemctl restart "$SERVICE_NAME"
 
 echo "[deploy] === healthcheck ==="
+# A VM de produção é compartilhada com outros projetos e tem recursos
+# apertados (954MB RAM) — o primeiro start do backend já levou 444s (7,4min)
+# por disputa de CPU/swap, e restarts subsequentes já levaram de ~51s a
+# ~250s dependendo da carga do momento. 30x2s=60s já deu falso negativo
+# repetidas vezes (backend ficava saudável pouco depois, sem esse script
+# nunca chegar a confirmar). 100x3s=300s cobre com folga o pior caso já
+# observado.
 healthy=false
-for i in $(seq 1 30); do
+for i in $(seq 1 100); do
   if curl -fsS "$HEALTH_URL" | grep -q '"status":"UP"'; then
     healthy=true
     break
   fi
-  sleep 2
+  sleep 3
 done
 
 if [ "$healthy" != "true" ]; then
