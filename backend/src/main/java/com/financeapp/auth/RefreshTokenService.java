@@ -54,6 +54,13 @@ public class RefreshTokenService {
      * emite um novo). Se o token apresentado já estiver revogado, isso é
      * tratado como reuso indevido (token roubado/copiado) e TODAS as
      * sessões ativas do usuário são revogadas imediatamente.
+     *
+     * <p>A revogação usa um {@code UPDATE} condicional atômico
+     * ({@link RefreshTokenRepository#revokeIfActive}) em vez de
+     * "ler depois revogar": sob concorrência (mesmo {@code rawToken} em
+     * duas chamadas simultâneas), só uma consegue {@code rowsAffected == 1}
+     * — a outra vê 0 e cai no mesmo caminho de reuso, nunca as duas emitem
+     * token filho (SEC-005).
      */
     // noRollbackFor é essencial aqui: a revogação de todas as sessões, no
     // ramo de reuso detectado abaixo, precisa ser persistida mesmo que o
@@ -64,7 +71,8 @@ public class RefreshTokenService {
         RefreshToken existing = refreshTokenRepository.findByTokenHash(hash(rawToken))
                 .orElseThrow(() -> new InvalidTokenException("Refresh token inválido"));
 
-        if (existing.isRevoked()) {
+        int rowsRevoked = refreshTokenRepository.revokeIfActive(existing.getId(), Instant.now());
+        if (rowsRevoked == 0) {
             log.warn("Reuso de refresh token detectado para userId={} — revogando todas as sessões",
                     existing.getUser().getId());
             refreshTokenRepository.revokeAllActiveForUser(existing.getUser().getId(), Instant.now());
@@ -75,8 +83,6 @@ public class RefreshTokenService {
             throw new InvalidTokenException("Refresh token expirado");
         }
 
-        existing.revoke();
-        refreshTokenRepository.save(existing);
         User owner = existing.getUser();
         return new RotatedToken(owner, issue(owner, userAgent));
     }

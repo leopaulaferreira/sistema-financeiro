@@ -88,17 +88,17 @@ Referências: OWASP ASVS 4.0, OWASP Top 10 2021, OWASP API Security Top 10 2023,
 
 | ID | Finding | Severidade | Componente | Status |
 |---|---|---|---|---|
-| SEC-001 | Rate limiter de auth sem eviction (memória cresce por IP distinto) | MEDIUM | `AuthRateLimiter` | OPEN |
-| SEC-002 | Força bruta distribuída por IP contorna rate limit (sem controle por conta) | MEDIUM | `AuthRateLimiter`/`AuthController` | OPEN |
+| SEC-001 | Rate limiter de auth sem eviction (memória cresce por IP distinto) | MEDIUM | `AuthRateLimiter` | **FIXED** (`security/hardening-p1`, `5144856`) |
+| SEC-002 | Força bruta distribuída por IP contorna rate limit (sem controle por conta) | MEDIUM | `AuthRateLimiter`/`AuthController` | **DEFERRED — P2** (ver seção 9, justificativa registrada em `security/hardening-p1`) |
 | SEC-003 | Enumeração de e-mail via `/api/auth/register` (409 explícito) | LOW | `AuthService.register` | OPEN |
 | SEC-004 | Política de senha valida por caracteres, não por bytes UTF-8 (limite real do BCrypt é 72 bytes) | LOW | `RegisterRequest` | OPEN |
-| SEC-005 | Rotação de refresh token sem lock — race condition permite 2 filhos válidos de 1 token pai | MEDIUM | `RefreshTokenService.rotate` | OPEN |
+| SEC-005 | Rotação de refresh token sem lock — race condition permite 2 filhos válidos de 1 token pai | MEDIUM | `RefreshTokenService.rotate` | **FIXED** (`security/hardening-p1`, `cc88668`) |
 | SEC-006 | Sem tolerância de clock skew no JWT (informativo, sem risco prático hoje) | INFO | `JwtService` | OPEN |
 | SEC-007 | Sem "logout de todos os dispositivos" self-service | INFO | Auth (ausência de endpoint) | OPEN |
 | SEC-008 | Rate limit de auth compartilhado entre login/register/refresh (impacto em CGNAT) | INFO | `AuthController` | OPEN |
 | SEC-009 | `user_agent` do refresh token não usado como sinal de segurança | INFO | `RefreshTokenService` | OPEN |
 | SEC-010 | Ausência de `@Digits` em campos financeiros — valor fora de precisão gera 500 em vez de 400 | MEDIUM | DTOs de account/transaction/recurring/budget/goal | OPEN |
-| SEC-011 | CSV export não neutraliza `=`,`+`,`-`,`@` — Formula/CSV Injection | MEDIUM | `ReportService.exportCsv` | OPEN |
+| SEC-011 | CSV export não neutraliza `=`,`+`,`-`,`@` — Formula/CSV Injection | MEDIUM | `ReportService.exportCsv` | **FIXED** (`security/hardening-p1`, `eada752`) |
 | SEC-012 | Listagens sem paginação em recursos de baixa cardinalidade (account/category/etc.) | INFO | Controllers diversos | OPEN |
 | SEC-013 | Workflow do GitHub Actions sem bloco `permissions:` explícito (least privilege do `GITHUB_TOKEN`) | LOW | `.github/workflows/ci.yml` | OPEN |
 | SEC-014 | Actions do GitHub fixadas por tag mutável (`@v4`), não por SHA | INFO | `.github/workflows/ci.yml` | OPEN |
@@ -136,7 +136,7 @@ Nenhum.
 **Correção:** trocar por cache com `maximumSize`/`expireAfterWrite` (ex.: Caffeine) ou tarefa `@Scheduled` de limpeza periódica.
 **Regressão:** teste inserindo N chaves e validando que o tamanho do cache não cresce sem limite após expiração.
 **OWASP:** ASVS §11.1.4; API Security Top 10 API4:2023.
-**Status:** OPEN — **P1**
+**Status:** **FIXED** — `security/hardening-p1` (`5144856`). `ConcurrentHashMap` substituído por `com.github.benmanes.caffeine.cache.Cache` com `maximumSize` (`app.auth.rate-limit.cache-max-size`, default 10000) e `expireAfterWrite` igual à janela configurada. Regressão: `AuthRateLimiterTest.cacheSize_isBoundedByMaximumSize_evenWithManyDistinctKeys` (insere 10x o `maximumSize` de teste e confirma `estimatedSize() <= maximumSize` após `cleanUp()`) e `AuthRateLimiterTest.windowStillExpires_afterEviction_infrastructureChangeDoesNotBreakBehavior` (confirma que a janela por IP continua expirando normalmente).
 
 ### SEC-002 — Proteção contra força bruta é só por IP; sem lockout por conta
 **Componente:** `AuthRateLimiter.checkAllowed` chaveado por `request.getRemoteAddr()` (`AuthController.java:93-95`), nunca por e-mail.
@@ -145,7 +145,11 @@ Nenhum.
 **Correção:** avaliar controle complementar por conta (contador de falhas persistido com lockout temporário curto — cuidado para manter tempo de resposta/mensagem idênticos entre "não existe" e "bloqueada", preservando a mitigação de enumeração já existente) ou CAPTCHA progressivo por IP+e-mail.
 **Regressão:** teste simulando falhas contra o mesmo e-mail vindas de IPs diferentes, validando lockout temporário a partir de um limiar.
 **OWASP:** ASVS §2.2.1; Top 10 A07:2021.
-**Status:** OPEN — **P2**
+**Status:** **DEFERRED — P2** (decisão registrada em `security/hardening-p1`, nenhum código alterado para este item). Justificativa técnica:
+- Uma implementação segura exige que o *tempo de resposta e a mensagem* sejam idênticos entre "conta bloqueada", "conta não existe" e "senha errada" — qualquer divergência reabre exatamente o canal de enumeração de e-mail que o login já mitiga hoje com o hash BCrypt dummy (ver seção 12). Garantir isso com confiança exige um lookup de estado de bloqueio cujo custo não seja distinguível do custo do BCrypt (~100ms) sob medição externa — viável em princípio (um `Cache.get()` é sub-milissegundo frente ao BCrypt), mas validar essa garantia com um teste automatizado não-flaky está fora do que é razoável nesta branch (o próprio plano desta fase pede para evitar "teste de timing extremamente rígido/flaky").
+- É uma decisão de política de produto, não só técnica: qualquer lockout por conta (mesmo temporário e com janela curta) introduz uma nova superfície de DoS contra o usuário legítimo (um atacante que só queira incomodar um usuário específico pode forçar o lockout de propósito, sabendo o e-mail dele). Definir o limiar/janela certos para equilibrar isso é uma escolha de produto, não uma correção mecânica — o próprio `SECURITY_AUDIT.md` já classificava este item como P2 ("requer decisão de produto sobre a estratégia de mitigação") antes desta fase.
+- Mitigação hoje: custo de BCrypt por tentativa, senha mínima de 8 caracteres, rate limiter por IP (10 tentativas/60s, já com eviction limitada desde SEC-001) — reduz a superfície a "força bruta distribuída propositalmente entre múltiplos IPs contra uma conta específica", um ataque de custo/sofisticação não trivial para o porte desta aplicação (financeira pessoal, não um alvo de alto valor para automação em escala).
+- Risco residual aceito: força bruta direcionada e distribuída contra uma única conta permanece possível. Reavaliar se o produto crescer (mais usuários, maior valor por conta) ou se houver evidência real de tentativa de força bruta nos logs.
 
 ### SEC-005 — Rotação de refresh token sem lock: race condition permite dois tokens filhos válidos a partir de um único token pai
 **Componente:** `backend/src/main/java/com/financeapp/auth/RefreshTokenService.java:62-82`
@@ -154,7 +158,7 @@ Nenhum.
 **Correção:** `UPDATE refresh_tokens SET revoked_at = :now WHERE token_hash = :hash AND revoked_at IS NULL` checando `rowsAffected`, ou `@Lock(PESSIMISTIC_WRITE)`.
 **Regressão:** teste de integração com duas chamadas concorrentes ao mesmo refresh token, afirmando que só uma sucede.
 **OWASP:** ASVS §3.5; Top 10 A04:2021.
-**Status:** OPEN — **P1**
+**Status:** **FIXED** — `security/hardening-p1` (`cc88668`). Implementado `RefreshTokenRepository.revokeIfActive` (UPDATE condicional atômico `WHERE id = :id AND revokedAt IS NULL`, retornando `rowsAffected`), chamado antes do `issue()` do token filho; `rowsAffected == 0` cai no mesmo caminho de reuso já existente. Regressão: `RefreshTokenConcurrencyTest.concurrentRotate_withSameToken_onlyOneSucceeds` (duas chamadas concorrentes sincronizadas por `CountDownLatch` contra Postgres real via Testcontainers, confirmando exatamente 1 sucesso, 1 reuso detectado, e 0 tokens ativos ao final).
 
 ### SEC-010 — Ausência de `@Digits` nos campos financeiros — valor fora da precisão da coluna gera 500 em vez de 400
 **Componente:** DTOs de `account`, `transaction`, `recurring`, `budget`, `goal` (`amount`/`initialBalance`/`targetAmount`), todos mapeados para colunas `NUMERIC(12,2)`.
@@ -173,7 +177,7 @@ Nenhum DTO usa `@Digits(integer=10, fraction=2)` espelhando a coluna — um valo
 **Correção:** em `csvField()`, prefixar com `'` (aspas simples) valores que comecem com `=`,`+`,`-`,`@`,tab ou CR, antes do escaping de aspas/vírgula existente (OWASP CSV Injection Prevention Cheat Sheet).
 **Regressão:** teste unitário de `csvField()` cobrindo cada caractere de gatilho, confirmando o prefixo neutralizante na saída.
 **OWASP:** OWASP CSV Injection; ASVS §5.1.
-**Status:** OPEN — **P1**
+**Status:** **FIXED** — `security/hardening-p1` (`eada752`). `csvField()` agora prefixa com `'` valores cujo primeiro caractere esteja em `=+-@`, tab ou CR, antes do escaping RFC 4180 existente; aplicado uniformemente aos quatro campos textuais do export (descrição, categoria, conta, método de pagamento) via o mesmo helper central — nenhuma lógica duplicada. Regressão: `ReportServiceCsvFieldTest` (13 casos, unitário — cada gatilho + regressão de vírgula/aspas/quebra de linha/texto normal) e `ReportControllerIntegrationTest.exportCsv_descriptionStartingWithFormulaTrigger_isNeutralizedInOutput` (ponta a ponta via API real).
 
 ---
 
@@ -330,13 +334,13 @@ Testes de segurança recomendados, por prioridade (a suíte já existente — `A
 
 **P0 — corrigir imediatamente:** nenhum item (sem CRITICAL/HIGH).
 
-**P1 — antes do próximo deploy:**
-- SEC-011 (CSV Formula Injection) — correção pequena e isolada em `csvField()`.
-- SEC-005 (race condition na rotação de refresh token) — correção pequena e isolada (`UPDATE` condicional ou lock).
-- SEC-001 (rate limiter sem eviction) — trocar estrutura de dados.
+**P1 — antes do próximo deploy:** ✅ **concluído em `security/hardening-p1`** (2026-08-30, ainda sem merge em `main` — ver PR).
+- SEC-011 (CSV Formula Injection) — **FIXED** (`eada752`).
+- SEC-005 (race condition na rotação de refresh token) — **FIXED** (`cc88668`).
+- SEC-001 (rate limiter sem eviction) — **FIXED** (`5144856`).
 
 **P2 — curto prazo:**
-- SEC-002 (força bruta distribuída por conta) — requer decisão de produto sobre a estratégia de mitigação.
+- SEC-002 (força bruta distribuída por conta) — avaliado nesta fase e **deferido deliberadamente** (ver seção 9 para a justificativa completa); requer decisão de produto sobre limiar/janela de lockout e um teste de timing/enumeração que não seja flaky antes de ser implementado com segurança.
 - SEC-010 (`@Digits` em campos financeiros) — mudança mecânica em 6 DTOs.
 
 **P3 — hardening futuro:**
