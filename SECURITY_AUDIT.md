@@ -11,7 +11,7 @@
 
 O projeto está, de forma geral, **bem acima da média** para o porte de uma aplicação financeira pessoal single-tenant: disciplina de ownership (IDOR) consistente em 100% dos módulos de negócio revisados, refresh token nunca em texto plano, detecção de reuso de refresh token com revogação de família, CSRF via double-submit cookie aplicado até em login/registro, cabeçalhos de segurança configurados tanto no Spring Security quanto no Nginx, backend isolado atrás de Nginx (bind em `127.0.0.1`), scripts de backup/restore com boas práticas (permissão 0600, sem senha em argumento de linha de comando, confirmação explícita para restore), e systemd já com hardening básico (usuário dedicado sem privilégios, `ProtectSystem=strict`, `NoNewPrivileges=true`).
 
-**Nenhuma vulnerabilidade CRITICAL ou HIGH foi encontrada.** Os 15 achados classificados são majoritariamente de robustez/hardening (concorrência, limites de recursos, validação de entrada) e nenhum permite, isoladamente, acesso não autorizado a dados de outro usuário. Os três riscos mais relevantes para priorizar são:
+**Nenhuma vulnerabilidade CRITICAL ou HIGH foi encontrada.** Os 21 achados classificados são majoritariamente de robustez/hardening (concorrência, limites de recursos, validação de entrada, tratamento de erro) e nenhum permite, isoladamente, acesso não autorizado a dados de outro usuário. Os três riscos mais relevantes para priorizar são:
 
 1. **Corrida (race condition) na rotação de refresh token** (SEC-005, MEDIUM) — enfraquece a garantia de detecção de reuso sob concorrência.
 2. **Formula/CSV Injection na exportação de relatórios** (SEC-011, MEDIUM) — arquivo exportado pode conter fórmulas que executam no Excel/LibreOffice de quem o abrir.
@@ -103,8 +103,14 @@ Referências: OWASP ASVS 4.0, OWASP Top 10 2021, OWASP API Security Top 10 2023,
 | SEC-013 | Workflow do GitHub Actions sem bloco `permissions:` explícito (least privilege do `GITHUB_TOKEN`) | LOW | `.github/workflows/ci.yml` | OPEN |
 | SEC-014 | Actions do GitHub fixadas por tag mutável (`@v4`), não por SHA | INFO | `.github/workflows/ci.yml` | OPEN |
 | SEC-015 | Nenhum limite explícito de tamanho de corpo de requisição documentado no backend (depende do default implícito do Nginx) | INFO | `deploy/nginx/*.conf`, backend | OPEN |
+| SEC-016 | HSTS enviado pela API (default do Spring Security, `includeSubDomains`) diverge do HSTS conservador do Nginx | LOW | `SecurityConfig` | OPEN |
+| SEC-017 | Sem rate limiting em `/api/reports/*` (incl. `export.csv`, que carrega transações do período em memória) | LOW | `ReportController` | OPEN |
+| SEC-018 | `page` sem validação/teto em `GET /api/transactions` — `page` negativo retorna 500 em vez de 400 | LOW | `TransactionController.search` | OPEN |
+| SEC-019 | `DataIntegrityViolationException` não tratada — corrida de nome duplicado em categoria/método de pagamento retorna 500 em vez de 409 | LOW | `CategoryService`, `PaymentMethodService`, `GlobalExceptionHandler` | OPEN |
+| SEC-020 | `HttpMessageNotReadableException` (JSON malformado / enum inválido) sem handler dedicado — provável 500 em vez de 400 | LOW | `GlobalExceptionHandler` | OPEN |
+| SEC-021 | Ausência de proteção de idempotência em `POST /api/transactions` e `POST /api/goals/{id}/contributions` (duplo clique/retry gera duplicidade) | LOW | `TransactionService`, `GoalService` | OPEN |
 
-**Totais:** CRITICAL 0 · HIGH 0 · MEDIUM 5 · LOW 3 · INFO 7 — **15 findings**.
+**Totais:** CRITICAL 0 · HIGH 0 · MEDIUM 5 · LOW 9 · INFO 7 — **21 findings**.
 
 ---
 
@@ -182,6 +188,24 @@ BCrypt processa apenas os primeiros 72 **bytes**; `@Size(max = 72)` em `Register
 ### SEC-013 — Workflow do GitHub Actions sem bloco `permissions:` explícito
 `.github/workflows/ci.yml` não declara `permissions:`, então o `GITHUB_TOKEN` herda o padrão da organização/repositório (pode ser `write` em repositórios mais antigos). O workflow só roda testes/build, não precisa de escrita em conteúdo/PRs. **Correção:** adicionar `permissions: contents: read` no topo do workflow (least privilege). **Status:** OPEN — P3.
 
+### SEC-016 — HSTS da API diverge do HSTS conservador do Nginx
+`SecurityConfig.headers(...)` (`backend/src/main/java/com/financeapp/config/SecurityConfig.java:84-91`) configura CSP/Referrer-Policy/Permissions-Policy explicitamente, mas **não** configura HSTS — o Spring Security aplica o default da biblioteca (`max-age=31536000; includeSubDomains`). Isso diverge do HSTS deliberadamente conservador do Nginx (`deploy/nginx/sistema-financeiro.conf:80,91,123`, `max-age=15552000`, **sem** `includeSubDomains` — decisão documentada no próprio arquivo, linha 71, por não haver garantia de que outros subdomínios da VM tenham HTTPS válido). Como `/api/` não tem `add_header` no Nginx (a resposta do backend passa como veio), o navegador recebe políticas HSTS diferentes dependendo de qual endpoint respondeu por último — o valor mais amplo (`includeSubDomains`) vindo da API contradiz a intenção documentada no Nginx. Não é uma vulnerabilidade explorável (HSTS mais amplo tende a ser mais seguro, não menos) — é um risco operacional: se um subdomínio de `finance.leofe.com.br` existir sem HTTPS válido, pode ficar inacessível até o `max-age` expirar no navegador. **Correção:** configurar `httpStrictTransportSecurity` explicitamente em `SecurityConfig` com os mesmos valores do Nginx (`maxAgeInSeconds=15552000`, `includeSubDomains=false`), ou documentar a divergência como aceitável. **Teste de regressão:** teste de integração que assere o valor exato do header `Strict-Transport-Security` em respostas de `/api/**`. **OWASP:** ASVS 9.1 (Communications Security). **Status:** OPEN — P3.
+
+### SEC-017 — Sem rate limiting em `/api/reports/*` (incl. `export.csv`)
+`AuthRateLimiter` só é referenciado em `AuthController`/`AuthService` (confirmado por grep) — nenhum dos 9 endpoints de `ReportController`, incluindo `export.csv` (que monta a lista completa de transações do período em memória, `ReportService.exportCsv`), tem limite de taxa. O único controle existente é o teto de 5 anos de período (`ReportService.MAX_PERIOD_YEARS`), que limita o tamanho de uma resposta, não a frequência de chamadas. Um usuário autenticado (ou sessão comprometida) pode repetir chamadas em loop apertado, gerando carga de CPU/IO desnecessária no Postgres de uma instância única de baixo recurso (`-Xmx256m`, `DB_POOL_SIZE=4`). Dano autolimitado aos próprios dados do usuário (sem amplificação cross-tenant). **Correção:** aplicar um limitador por `userId` autenticado (mesmo padrão simples do `AuthRateLimiter`) nos endpoints de relatório/exportação, com limites generosos para uso normal. **Teste de regressão:** teste de integração disparando mais requisições que o limite configurado e esperando 429. **OWASP:** API Security Top 10 — API4:2023 (Unrestricted Resource Consumption). **Status:** OPEN — P3.
+
+### SEC-018 — `page` sem validação/teto em `GET /api/transactions`
+`TransactionController.search` (`backend/src/main/java/com/financeapp/transaction/TransactionController.java:49-52`) capa corretamente `size` em `[1,100]`, mas não valida `page`. Um `page` negativo chega em `PageRequest.of(page, size)` (`TransactionService.java:112`), que lança `IllegalArgumentException`, capturada pelo handler genérico e retornada como **500** em vez de **400**. Achado confirmado de forma independente por duas linhas de investigação distintas desta auditoria (autorização e validação de input), reforçando a confiança. Sem IDOR envolvido — o filtro `t.user.id = :userId` sempre restringe o dano ao próprio usuário. **Correção:** `int cappedPage = Math.max(page, 0);` (mesmo padrão já usado para `size`), ou `@Min(0) int page` no Controller. **Teste de regressão:** `GET /api/transactions?page=-1` deve retornar 400 (ou 200 com primeira página), nunca 500. **OWASP:** ASVS 5.1 (Input Validation). **Status:** OPEN — P3.
+
+### SEC-019 — `DataIntegrityViolationException` não tratada em corrida de nome duplicado (categoria/método de pagamento)
+`categories` (`UNIQUE (user_id, name, type)`) e `payment_methods` (`UNIQUE (user_id, name)`) têm constraint única no schema (migration V2), mas `CategoryService`/`PaymentMethodService` não fazem checagem prévia de duplicidade em nível de aplicação — diferente de `BudgetService.assertNotDuplicate`, que existe e mapeia para 409. Duas requisições concorrentes criando o mesmo nome fazem a segunda falhar no INSERT com `DataIntegrityViolationException`, sem `@ExceptionHandler` dedicado no `GlobalExceptionHandler`, caindo no handler genérico → **500** em vez de **409 Conflict**. Nenhuma corrupção de dado (a constraint do banco funciona corretamente), apenas resposta HTTP incorreta para uma corrida benigna de "double-click". **Correção:** adicionar `@ExceptionHandler(DataIntegrityViolationException.class)` retornando 409, e opcionalmente replicar `assertNotDuplicate` em `CategoryService`/`PaymentMethodService`. **Teste de regressão:** duas criações concorrentes (ou sequenciais) de categoria com mesmo nome devem retornar 409 na segunda, não 500. **OWASP:** fail securely / clear error handling (sem CWE Top 10 direto). **Status:** OPEN — P3.
+
+### SEC-020 — `HttpMessageNotReadableException` (JSON malformado / enum inválido) sem handler dedicado
+O `@RestControllerAdvice` trata `MethodArgumentNotValidException` e `ConstraintViolationException`, mas não tem handler para `HttpMessageNotReadableException` — lançada pelo Jackson **antes** do `@Valid` rodar, quando o corpo é JSON malformado ou contém um valor de enum inválido (ex.: `"type": "NAO_EXISTE"` em `TransactionType`). Cai no handler genérico (`Exception.class`) → provável **500** em vez de **400**. **Confiança:** achado por análise estática (comportamento documentado do `ExceptionHandlerExceptionResolver` do Spring MVC), não verificado em runtime nesta sessão — nenhum teste de integração existente cobre este caso. Sem vazamento de dado (mensagem genérica em ambos os casos), apenas UX de erro degradada e log de erro desnecessário. **Correção:** adicionar `@ExceptionHandler(HttpMessageNotReadableException.class)` retornando 400 com mensagem "Corpo da requisição inválido ou malformado". **Teste de regressão:** POST com JSON sintaticamente inválido e com valor de enum inexistente devem retornar 400 (não 500) — este teste também serve para confirmar o achado em runtime. **OWASP:** ASVS 5.1 (Input Validation), fail securely. **Status:** OPEN — P3.
+
+### SEC-021 — Ausência de proteção de idempotência em criação de recursos financeiros
+`POST /api/transactions` e `POST /api/goals/{id}/contributions` não têm chave de idempotência, debounce no backend, nem constraint única que impeça duas linhas idênticas — diferente de `budgets`/`categories`/`payment_methods`, que têm `UNIQUE` no schema (aqui, deliberadamente ausente: duas transações idênticas no mesmo dia são um caso de uso legítimo, ex. dois cafés de R$5). Duplo clique no botão "Salvar", ou um retry automático de rede durante falha tardia, gera duas transações idênticas, inflando despesas/receitas sem aviso — abuso/erro de integridade financeira, não uma falha de acesso. **Correção:** se reportado como problema real por usuários, considerar chave de idempotência opcional (header `Idempotency-Key`, cacheada por `userId+key` por alguns minutos) nesses dois endpoints — não obrigatório hoje. **Teste de regressão:** se implementado, duas requisições idênticas com o mesmo `Idempotency-Key` devem gerar apenas um registro. **OWASP:** API Security Top 10 — API4:2023 (parcialmente relacionado); sem CWE específico de "missing idempotency". **Status:** OPEN — P3.
+
 ---
 
 ## 11. Informational
@@ -232,13 +256,13 @@ Ver seção 12. Residual risk documentado (não é bug): access tokens JWT conti
 
 ## 15. API Security
 
-Rate limiting de relatórios/exportação: todos os endpoints de `/api/reports/*` (incluindo `export.csv`) validam um período máximo de 5 anos (`validatePeriod`, aplicado consistentemente, sem exceção) e limites (`@Min`/`@Max`) em `limit`/`months`. Paginação de transações capada em `[1,100]`. HTTP methods: nenhum `@PatchMapping` no código (embora `PATCH` permaneça na lista de métodos CORS permitidos sem uso — cosmético, P3). Nenhum endpoint de upload de arquivo existe — **file upload: N/A**. Nenhuma chamada HTTP de saída construída a partir de URL fornecida pelo cliente — **SSRF: N/A**. Nenhum parâmetro `redirect`/`returnUrl`/`next` encontrado — **Open Redirect: N/A**. Nenhum envio de e-mail no projeto — **Email header injection: N/A**.
+Rate limiting de relatórios/exportação: todos os endpoints de `/api/reports/*` (incluindo `export.csv`) validam um período máximo de 5 anos (`validatePeriod`, aplicado consistentemente, sem exceção) e limites (`@Min`/`@Max`) em `limit`/`months`, mas **não têm limitador de taxa** (`AuthRateLimiter` só cobre `/api/auth/*` — ver SEC-017). Paginação de transações capada em `size∈[1,100]`, mas `page` não é validado (ver SEC-018). HSTS enviado pela API diverge do HSTS do Nginx (ver SEC-016). HTTP methods: nenhum `@PatchMapping` no código (embora `PATCH` permaneça na lista de métodos CORS permitidos sem uso — cosmético, P3). Nenhum endpoint de upload de arquivo existe — **file upload: N/A**. Nenhuma chamada HTTP de saída construída a partir de URL fornecida pelo cliente — **SSRF: N/A**. Nenhum parâmetro `redirect`/`returnUrl`/`next` encontrado — **Open Redirect: N/A**. Nenhum envio de e-mail no projeto — **Email header injection: N/A**.
 
 ---
 
 ## 16. Input Validation
 
-Ver SEC-010. Bean Validation (`@NotNull`, `@Size`, `@DecimalMin`, `@Pattern`) presente e consistente em todos os DTOs de request revisados; gap isolado é a ausência de `@Digits` para os campos monetários. Datas validadas com regras de negócio específicas por módulo (ex.: `targetDate` de meta não anterior à criação, `endDate` de recorrência não anterior a `startDate`).
+Ver SEC-010, SEC-018, SEC-019, SEC-020, SEC-021. Bean Validation (`@NotNull`, `@Size`, `@DecimalMin`, `@Pattern`) presente e consistente em todos os DTOs de request revisados; os gaps identificados são todos de robustez de tratamento de erro (respostas 500 genéricas onde deveriam ser 400/409 estruturados), nunca de dado aceito incorretamente ou vazamento de informação — em todos os casos o `GlobalExceptionHandler` genérico já garante que nenhum detalhe interno (stacktrace, SQL, nome de classe) chega ao cliente, mesmo quando o código HTTP está "errado". Datas validadas com regras de negócio específicas por módulo (ex.: `targetDate` de meta não anterior à criação, `endDate` de recorrência não anterior a `startDate`). Nenhuma proteção de idempotência em POSTs financeiros (SEC-021) — risco de duplicidade por duplo clique, não de segurança de acesso.
 
 ---
 
@@ -295,6 +319,10 @@ Testes de segurança recomendados, por prioridade (a suíte já existente — `A
 5. **IDOR (regressão preventiva)** — mesmo sem achado hoje, recomenda-se um teste parametrizado genérico ("usuário B não pode GET/PUT/PATCH/DELETE recurso do usuário A") rodando contra todos os 9 módulos, para blindar contra regressão futura.
 6. **Ownership em referências cruzadas** — criar transação/recorrência/orçamento referenciando `accountId`/`categoryId`/`paymentMethodId` de outro usuário deve retornar 404.
 7. **Eviction do rate limiter** (cobre SEC-001) — validar que o cache não cresce sem limite.
+8. **Validação de parâmetros de paginação** (cobre SEC-018) — `page` negativo deve retornar 400, não 500.
+9. **Corrida de nome duplicado** (cobre SEC-019) — duas criações concorrentes de categoria/método de pagamento com mesmo nome devem retornar 409 na segunda, não 500.
+10. **JSON malformado / enum inválido** (cobre SEC-020) — confirma em runtime se o comportamento hoje é de fato 500 (achado por análise estática) e trava 400 como contrato.
+11. **Rate limit em relatórios/exportação** (cobre SEC-017) — acima de um limiar de chamadas por minuto, esperar 429.
 
 ---
 
@@ -312,7 +340,7 @@ Testes de segurança recomendados, por prioridade (a suíte já existente — `A
 - SEC-010 (`@Digits` em campos financeiros) — mudança mecânica em 6 DTOs.
 
 **P3 — hardening futuro:**
-- SEC-003, SEC-004, SEC-006 a SEC-009, SEC-012, SEC-013, SEC-014, SEC-015 — todos de baixo risco/informativos, sem urgência.
+- SEC-003, SEC-004, SEC-006 a SEC-009, SEC-012 a SEC-021 — todos de baixo risco/informativos, sem urgência (respostas HTTP incorretas sem vazamento de dado, gaps de robustez/UX, hardening de headers/CI).
 - Hardening systemd adicional (seção 19).
 - Criptografia de backup em repouso, caso a política de armazenamento evolua.
 - Verificação manual na VM real (firewall, permissões de arquivo, versão do Nginx) — checklist na seção 25.
