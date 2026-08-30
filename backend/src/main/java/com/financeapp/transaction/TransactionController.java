@@ -48,8 +48,9 @@ public class TransactionController {
             @RequestParam(required = false) Long accountId,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
+        int cappedPage = Math.max(page, 0); // SEC-018: page negativo virava 500 (IllegalArgumentException em PageRequest.of)
         int cappedSize = Math.min(Math.max(size, 1), 100);
-        return transactionService.search(principal.id(), from, to, type, categoryId, accountId, page, cappedSize);
+        return transactionService.search(principal.id(), from, to, type, categoryId, accountId, cappedPage, cappedSize);
     }
 
     @GetMapping("/{id}")

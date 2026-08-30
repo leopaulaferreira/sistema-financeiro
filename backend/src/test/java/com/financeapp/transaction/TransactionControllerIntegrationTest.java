@@ -230,6 +230,18 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
         assertThat(result.getResponse().getContentAsString()).doesNotContain("999");
     }
 
+    /** SEC-018: page negativo virava 500 (IllegalArgumentException em PageRequest.of), agora capado a 0. */
+    @Test
+    void search_negativePage_isCappedToFirstPage_insteadOf500() throws Exception {
+        Fixture f = setUpFixture("tx-negpage");
+        createTransaction(f, TransactionType.EXPENSE, BigDecimal.valueOf(10), LocalDate.of(2026, 8, 1));
+
+        mockMvc.perform(authed(get("/api/transactions").param("page", "-1"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.page").value(0));
+    }
+
     private TransactionResponse createTransaction(Fixture f, TransactionType type, BigDecimal amount, LocalDate date) throws Exception {
         TransactionRequest request = requestFor(f, type, amount, date);
         MvcResult result = mockMvc.perform(authed(post("/api/transactions"), f.session())
