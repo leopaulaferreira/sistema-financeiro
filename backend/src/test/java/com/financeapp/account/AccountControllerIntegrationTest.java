@@ -36,6 +36,18 @@ class AccountControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.active").value(true));
     }
 
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void createAccount_withInitialBalanceExceedingPrecision_returns400() throws Exception {
+        Session session = registerAndLogin("precision-owner@example.com", "senha1234");
+        AccountRequest request = new AccountRequest("Conta Corrente", AccountType.CHECKING, new BigDecimal("12345678901.23"));
+
+        mockMvc.perform(authed(post("/api/accounts"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void listAccounts_returnsOnlyOwnAccounts() throws Exception {
         Session owner = registerAndLogin("owner2@example.com", "senha1234");

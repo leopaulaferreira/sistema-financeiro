@@ -83,6 +83,17 @@ class GoalControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void create_withTargetAmountExceedingPrecision_returns400() throws Exception {
+        Session session = setUpUser("goal-precision");
+
+        mockMvc.perform(authed(post("/api/goals"), session)
+                        .contentType(APPLICATION_JSON)
+                        .content(goalJson("Meta", "12345678901.23", null)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void create_withPastTargetDate_returns400() throws Exception {
         Session session = setUpUser("goal-pastdate");
@@ -140,6 +151,18 @@ class GoalControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     // ---------- contribuições ----------
+
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void addContribution_withAmountExceedingPrecision_returns400() throws Exception {
+        Session session = setUpUser("goal-contrib-precision");
+        Long goalId = createGoal(session, "Meta", "1000.00");
+
+        mockMvc.perform(authed(post("/api/goals/" + goalId + "/contributions"), session)
+                        .contentType(APPLICATION_JSON)
+                        .content(contributionJson("12345678901.23", LocalDate.now().toString())))
+                .andExpect(status().isBadRequest());
+    }
 
     @Test
     void addContribution_updatesProgress() throws Exception {

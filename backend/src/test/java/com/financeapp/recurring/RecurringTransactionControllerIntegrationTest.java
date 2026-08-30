@@ -87,6 +87,20 @@ class RecurringTransactionControllerIntegrationTest extends AbstractIntegrationT
                 .andExpect(status().isBadRequest());
     }
 
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void create_withAmountExceedingPrecision_returns400() throws Exception {
+        Fixture f = setUpFixture("rt-precision");
+        RecurringTransactionCreateRequest request = new RecurringTransactionCreateRequest("Caro", new BigDecimal("12345678901.23"),
+                TransactionType.EXPENSE, f.expense().id(), f.account().id(), f.paymentMethod().id(),
+                RecurrenceFrequency.MONTHLY, LocalDate.now(), null);
+
+        mockMvc.perform(authed(post("/api/recurring-transactions"), f.session())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void create_withIncompatibleCategoryType_returns400() throws Exception {
         Fixture f = setUpFixture("rt-incompatible");

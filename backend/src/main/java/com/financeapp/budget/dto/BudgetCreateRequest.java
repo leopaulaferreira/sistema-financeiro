@@ -1,6 +1,7 @@
 package com.financeapp.budget.dto;
 
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
@@ -24,6 +25,7 @@ public record BudgetCreateRequest(
 
         @NotNull(message = "Valor é obrigatório")
         @DecimalMin(value = "0.0", inclusive = false, message = "Valor deve ser maior que zero")
+        @Digits(integer = 10, fraction = 2, message = "Valor deve ter no máximo 10 dígitos inteiros e 2 casas decimais")
         BigDecimal amount
 ) {
 }

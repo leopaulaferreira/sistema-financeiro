@@ -1,6 +1,7 @@
 package com.financeapp.account.dto;
 
 import com.financeapp.account.AccountType;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -17,6 +18,7 @@ public record AccountUpdateRequest(
         AccountType type,
 
         @NotNull(message = "Saldo inicial é obrigatório")
+        @Digits(integer = 10, fraction = 2, message = "Saldo inicial deve ter no máximo 10 dígitos inteiros e 2 casas decimais")
         BigDecimal initialBalance,
 
         @NotNull(message = "active é obrigatório")

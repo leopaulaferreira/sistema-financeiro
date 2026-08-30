@@ -77,6 +77,18 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isBadRequest());
     }
 
+    /** SEC-010: valor fora da precisão da coluna NUMERIC(12,2) caía sem @Digits e virava 500 no INSERT, não 400. */
+    @Test
+    void create_amountExceedingPrecision_returns400() throws Exception {
+        Fixture f = setUpFixture("tx-precision");
+        TransactionRequest request = requestFor(f, TransactionType.INCOME, new BigDecimal("12345678901.23"), LocalDate.of(2026, 8, 5));
+
+        mockMvc.perform(authed(post("/api/transactions"), f.session())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void createIncome_returns201() throws Exception {
         Fixture f = setUpFixture("tx-income");
