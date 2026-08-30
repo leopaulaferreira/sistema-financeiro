@@ -43,6 +43,40 @@ class TransactionControllerIntegrationTest extends AbstractIntegrationTest {
                 f.paymentMethod().id(), "obs");
     }
 
+    /** SEC-020: JSON sintaticamente inválido caía no handler genérico (500) em vez de 400. */
+    @Test
+    void create_malformedJson_returns400() throws Exception {
+        Session session = registerAndLogin("tx-malformed@example.com", "senha1234");
+
+        mockMvc.perform(authed(post("/api/transactions"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{ isto não é json válido"))
+                .andExpect(status().isBadRequest());
+    }
+
+    /** SEC-020: valor de enum inexistente (rejeitado pelo Jackson antes do @Valid) caía no handler genérico (500) em vez de 400. */
+    @Test
+    void create_invalidEnumValue_returns400() throws Exception {
+        Fixture f = setUpFixture("tx-invalidenum");
+
+        String body = """
+                {
+                  "description": "Lançamento",
+                  "amount": 10,
+                  "type": "NAO_EXISTE",
+                  "date": "2026-08-01",
+                  "categoryId": %d,
+                  "accountId": %d,
+                  "paymentMethodId": %d
+                }
+                """.formatted(f.expense().id(), f.account().id(), f.paymentMethod().id());
+
+        mockMvc.perform(authed(post("/api/transactions"), f.session())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isBadRequest());
+    }
+
     @Test
     void createIncome_returns201() throws Exception {
         Fixture f = setUpFixture("tx-income");

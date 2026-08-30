@@ -33,6 +33,23 @@ class PaymentMethodControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.name").value("Pix"));
     }
 
+    /** SEC-019: constraint UNIQUE(user_id,name) sem checagem prévia virava 500 (DataIntegrityViolationException) em vez de 409. */
+    @Test
+    void createPaymentMethod_withDuplicateName_returns409() throws Exception {
+        Session session = registerAndLogin("pmdup@example.com", "senha1234");
+        PaymentMethodRequest request = new PaymentMethodRequest("Pix", PaymentMethodType.PIX);
+
+        mockMvc.perform(authed(post("/api/payment-methods"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(authed(post("/api/payment-methods"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isConflict());
+    }
+
     @Test
     void listPaymentMethods_isIsolatedBetweenUsers() throws Exception {
         Session owner = registerAndLogin("pmowner2@example.com", "senha1234");

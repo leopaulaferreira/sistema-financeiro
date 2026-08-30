@@ -34,6 +34,23 @@ class CategoryControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$.type").value("EXPENSE"));
     }
 
+    /** SEC-019: constraint UNIQUE(user_id,name,type) sem checagem prévia virava 500 (DataIntegrityViolationException) em vez de 409. */
+    @Test
+    void createCategory_withDuplicateNameAndType_returns409() throws Exception {
+        Session session = registerAndLogin("catdup@example.com", "senha1234");
+        CategoryRequest request = new CategoryRequest("Alimentação", TransactionType.EXPENSE, "#F0596B", "utensils");
+
+        mockMvc.perform(authed(post("/api/categories"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(authed(post("/api/categories"), session)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(request)))
+                .andExpect(status().isConflict());
+    }
+
     @Test
     void listCategories_isIsolatedBetweenUsers() throws Exception {
         Session owner = registerAndLogin("catowner2@example.com", "senha1234");
