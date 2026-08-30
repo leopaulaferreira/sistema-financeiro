@@ -29,7 +29,7 @@ import {
   useTopExpenses,
   useTopIncome,
 } from '@/features/reports/hooks/use-reports'
-import { currentMonthRange, toReportRange } from '@/lib/date-range'
+import { currentMonthRange, maxReportPeriodRange, toReportRange } from '@/lib/date-range'
 import { formatCurrency } from '@/lib/format'
 import { reportsService } from '@/services/reports-service'
 import { friendlyErrorMessage } from '@/services/api-error'
@@ -59,6 +59,11 @@ export function ReportsPage() {
     () => new Map((categories.data ?? []).map((c) => [c.id, c.color])),
     [categories.data],
   )
+
+  function handleFullPeriod() {
+    setRange(maxReportPeriodRange())
+    setGranularity('MONTH') // diário ficaria denso demais num intervalo de anos
+  }
 
   async function handleExportCsv() {
     setExporting(true)
@@ -91,6 +96,9 @@ export function ReportsPage() {
               toInclusive={range.to}
               onChange={(r) => setRange({ from: r.from, to: r.toInclusive })}
             />
+            <Button variant="outline" className="border-border" onClick={handleFullPeriod}>
+              Todo o período
+            </Button>
             <Button variant="outline" className="border-border" onClick={handleExportCsv} disabled={exporting}>
               <ArrowDownToLine className="size-4" />
               Exportar CSV
