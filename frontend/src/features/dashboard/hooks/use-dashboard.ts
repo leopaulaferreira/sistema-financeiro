@@ -4,21 +4,21 @@ import { queryKeys } from '@/lib/query-keys'
 
 export function useDashboardSummary(period: DashboardPeriod) {
   return useQuery({
-    queryKey: queryKeys.dashboardSummary(period.year, period.month),
+    queryKey: queryKeys.dashboardSummary(period),
     queryFn: () => dashboardService.summary(period),
   })
 }
 
 export function useExpensesByCategory(period: DashboardPeriod) {
   return useQuery({
-    queryKey: queryKeys.dashboardExpensesByCategory(period.year, period.month),
+    queryKey: queryKeys.dashboardExpensesByCategory(period),
     queryFn: () => dashboardService.expensesByCategory(period),
   })
 }
 
 export function useIncomeVsExpense(period: DashboardPeriod) {
   return useQuery({
-    queryKey: queryKeys.dashboardIncomeVsExpense(period.year, period.month),
+    queryKey: queryKeys.dashboardIncomeVsExpense(period),
     queryFn: () => dashboardService.incomeVsExpense(period),
   })
 }

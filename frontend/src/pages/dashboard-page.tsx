@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/common/empty-state'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { FinancialChart } from '@/features/dashboard/components/financial-chart'
 import { CategoryChart } from '@/features/dashboard/components/category-chart'
-import { PeriodSelector } from '@/features/dashboard/components/period-selector'
+import { DashboardPeriodSelector } from '@/features/dashboard/components/dashboard-period-selector'
 import { TransactionTable } from '@/features/transactions/components/transaction-table'
 import { AccountCard } from '@/features/accounts/components/account-card'
 import { useCategoriesQuery } from '@/features/categories/hooks/use-categories'
@@ -37,6 +37,8 @@ export function DashboardPage() {
   const categories = useCategoriesQuery()
   const accounts = useAccountsQuery()
 
+  const periodLabel = 'total' in period ? 'no período' : 'do mês'
+
   const colorByCategoryId = useMemo(
     () => new Map((categories.data ?? []).map((c) => [c.id, c.color])),
     [categories.data],
@@ -48,7 +50,7 @@ export function DashboardPage() {
       <PageHeader
         title="Dashboard"
         description="Visão geral das suas finanças."
-        actions={<PeriodSelector value={period} onChange={setPeriod} />}
+        actions={<DashboardPeriodSelector value={period} onChange={setPeriod} />}
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -66,10 +68,10 @@ export function DashboardPage() {
         ) : (
           <>
             <StatCard label="Saldo disponível" value={formatCurrency(summary.data.availableBalance)} icon={Wallet} tone="neutral" />
-            <StatCard label="Receitas do mês" value={formatCurrency(summary.data.totalIncome)} icon={TrendingUp} tone="success" />
-            <StatCard label="Despesas do mês" value={formatCurrency(summary.data.totalExpenses)} icon={TrendingDown} tone="danger" />
+            <StatCard label={`Receitas ${periodLabel}`} value={formatCurrency(summary.data.totalIncome)} icon={TrendingUp} tone="success" />
+            <StatCard label={`Despesas ${periodLabel}`} value={formatCurrency(summary.data.totalExpenses)} icon={TrendingDown} tone="danger" />
             <StatCard
-              label="Economia do mês"
+              label={`Economia ${periodLabel}`}
               value={formatCurrency(summary.data.netSavings)}
               icon={PiggyBank}
               tone={summary.data.netSavings >= 0 ? 'success' : 'danger'}

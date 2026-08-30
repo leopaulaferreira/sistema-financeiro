@@ -7,6 +7,7 @@ import type {
   TopTransactionsParams,
   TransactionSearchParams,
 } from '@/types/requests'
+import type { DashboardPeriod } from '@/services/dashboard-service'
 
 /** Chaves centralizadas para evitar strings soltas espalhadas pelos hooks. */
 export const queryKeys = {
@@ -20,11 +21,9 @@ export const queryKeys = {
   goals: (params?: GoalSearchParams) => ['goals', params ?? {}] as const,
   goalContributions: (goalId: number) => ['goals', goalId, 'contributions'] as const,
   dashboard: ['dashboard'] as const,
-  dashboardSummary: (year: number, month: number) => ['dashboard', 'summary', year, month] as const,
-  dashboardExpensesByCategory: (year: number, month: number) =>
-    ['dashboard', 'expenses-by-category', year, month] as const,
-  dashboardIncomeVsExpense: (year: number, month: number) =>
-    ['dashboard', 'income-vs-expense', year, month] as const,
+  dashboardSummary: (period: DashboardPeriod) => ['dashboard', 'summary', period] as const,
+  dashboardExpensesByCategory: (period: DashboardPeriod) => ['dashboard', 'expenses-by-category', period] as const,
+  dashboardIncomeVsExpense: (period: DashboardPeriod) => ['dashboard', 'income-vs-expense', period] as const,
   dashboardRecentTransactions: (limit?: number) => ['dashboard', 'recent-transactions', limit] as const,
   dashboardAccountsBalance: ['dashboard', 'accounts-balance'] as const,
   reportSummary: (params: ReportPeriod) => ['reports', 'summary', params] as const,
