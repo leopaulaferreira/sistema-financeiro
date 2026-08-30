@@ -1,0 +1,143 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: 167.234.233.150
+  DEPLOY_USER: deploy-financeiro
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: "21"
+          distribution: temurin
+          cache: maven
+
+      - name: Build backend (tests + package)
+        working-directory: backend
+        run: ./mvnw --batch-mode clean package
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend deps
+        working-directory: frontend
+        run: npm ci
+
+      # Um checkout do CI nunca deveria ter .env.local/.env.*.local — são
+      # git-ignored e só existem por acidente de sessão de dev local (foi
+      # exatamente isso que contaminou o build de produção em 2026-08-22,
+      # ver ARCHITECTURE.md/DEPLOYMENT.md). Falhar cedo e alto em vez de
+      # silenciosamente builder com URL errada.
+      - name: Guard against stray local env files
+        working-directory: frontend
+        run: |
+          set -e
+          found=()
+          for f in .env.local .env.production.local .env.development.local; do
+            [ -f "$f" ] && found+=("$f")
+          done
+          if [ "${#found[@]}" -gt 0 ]; then
+            echo "::error::Arquivo(s) de env local presentes no checkout: ${found[*]} — nunca deveria acontecer num checkout limpo do CI."
+            exit 1
+          fi
+          echo "Nenhum .env.local — OK."
+
+      - name: Frontend lint + test + build
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm run test:run
+          npm run build
+
+      # Sem VITE_API_URL definido, o build de produção resolve pra
+      # window.location.origin (frontend/src/lib/env.ts) — same-origin
+      # correto para finance.leofe.com.br. Este grep é só uma segunda
+      # camada de segurança contra regressão (ex.: alguém commitar um
+      # .env.production com URL de dev por engano).
+      - name: Anti-contamination check
+        working-directory: frontend
+        run: |
+          if grep -RoE "localhost:(8080|8090|5173|5180)" dist/assets/*.js; then
+            echo "::error::Bundle de produção contém referência a uma porta de dev local — build contaminado."
+            exit 1
+          fi
+          echo "Bundle limpo."
+
+      - name: Prepare SSH key
+        run: |
+          mkdir -p ~/.ssh
+          install -m 600 -D /dev/null ~/.ssh/deploy_key
+          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+      # Isolado num step próprio (antes do upload) para que REMOTE_DIR já
+      # esteja em $GITHUB_ENV mesmo se o step de upload falhar no meio —
+      # o step de cleanup (if: always()) precisa dele pra não deixar lixo
+      # órfão em /tmp na VM.
+      - name: Compute remote deploy dir
+        run: |
+          STAMP="$(date -u +%Y%m%d-%H%M%S)-${{ github.run_id }}"
+          echo "REMOTE_DIR=/tmp/sistema-financeiro-deploy-$STAMP" >> "$GITHUB_ENV"
+
+      - name: Upload artifacts and run deploy
+        run: |
+          set -euo pipefail
+          SSH="ssh -i ~/.ssh/deploy_key $DEPLOY_USER@$DEPLOY_HOST"
+          SCP="scp -i ~/.ssh/deploy_key"
+
+          $SSH "mkdir -p $REMOTE_DIR"
+          $SCP backend/target/backend-0.0.1-SNAPSHOT.jar "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DIR/app.jar"
+          $SCP deploy/scripts/deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DIR/deploy.sh"
+          $SCP -r frontend/dist "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DIR/dist"
+
+          # Wrapper sem variáveis de ambiente externas — o sudoers do
+          # deploy-financeiro na VM só autoriza rodar exatamente este
+          # caminho (/tmp/sistema-financeiro-deploy-*/run-deploy.sh), então
+          # os paths precisam estar hardcoded aqui dentro, não injetados
+          # via `sudo VAR=x` (evita precisar de SETENV no sudoers).
+          cat > run-deploy.sh <<'WRAPPER'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          cd "$(dirname "$0")"
+          chmod +x deploy.sh
+          BACKEND_JAR="$(pwd)/app.jar" FRONTEND_DIST="$(pwd)/dist" ./deploy.sh
+          WRAPPER
+          $SCP run-deploy.sh "$DEPLOY_USER@$DEPLOY_HOST:$REMOTE_DIR/run-deploy.sh"
+
+          $SSH "chmod +x $REMOTE_DIR/run-deploy.sh && sudo /bin/bash $REMOTE_DIR/run-deploy.sh"
+
+      - name: Cleanup remote temp dir
+        if: always()
+        run: |
+          ssh -i ~/.ssh/deploy_key "$DEPLOY_USER@$DEPLOY_HOST" "rm -rf '$REMOTE_DIR'" || true
+
+      - name: Smoke test
+        run: |
+          set -e
+          home_code=$(curl -s -o /dev/null -w '%{http_code}' https://finance.leofe.com.br/)
+          echo "home: $home_code"
+          [ "$home_code" = "200" ]
+
+          redirect_code=$(curl -s -o /dev/null -w '%{http_code}' http://finance.leofe.com.br/)
+          echo "http->https redirect: $redirect_code"
+          [ "$redirect_code" = "301" ]
+
+          accounts_code=$(curl -s -o /dev/null -w '%{http_code}' https://finance.leofe.com.br/api/accounts)
+          echo "accounts sem sessao: $accounts_code"
+          [ "$accounts_code" = "401" ]
