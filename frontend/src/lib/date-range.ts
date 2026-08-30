@@ -38,3 +38,21 @@ export function previousMonthRange(): { from: string; to: string } {
   const year = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
   return monthRange(year, month)
 }
+
+/** Deve espelhar MAX_PERIOD_YEARS em ReportService (backend) — período máximo aceito pelos relatórios. */
+const MAX_REPORT_PERIOD_YEARS = 5
+
+/**
+ * Maior intervalo que `/api/reports` aceita (ver `ReportService.validatePeriod`),
+ * usado pelo atalho "Todo o período" — o backend não tem endpoint pra "desde a
+ * primeira transação", então isto é o "todo o período" que o sistema permite.
+ * `from` fica 1 dia dentro do limite pra sobreviver ao `toReportRange` (+1 dia).
+ */
+export function maxReportPeriodRange(): { from: string; to: string } {
+  const now = new Date()
+  const to = toIsoDate(now)
+  const from = new Date(now)
+  from.setFullYear(from.getFullYear() - MAX_REPORT_PERIOD_YEARS)
+  from.setDate(from.getDate() + 1)
+  return { from: toIsoDate(from), to }
+}

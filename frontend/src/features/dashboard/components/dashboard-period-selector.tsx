@@ -25,7 +25,7 @@ interface DashboardPeriodSelectorProps {
 
 /**
  * Igual ao PeriodSelector (usado em Orçamentos), mas com uma opção extra
- * "Todos os meses" que agrega desde a primeira transação do usuário. Não é
+ * "Todo o período" que agrega desde a primeira transação do usuário. Não é
  * compartilhado com Orçamentos porque orçamento é um conceito
  * inerentemente mensal — "total" não se aplica lá.
  */
@@ -50,7 +50,7 @@ export function DashboardPeriodSelector({ value, onChange }: DashboardPeriodSele
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value={TOTAL_VALUE}>Todos os meses</SelectItem>
+          <SelectItem value={TOTAL_VALUE}>Todo o período</SelectItem>
           {MONTH_LABELS.map((label, i) => (
             <SelectItem key={label} value={String(i + 1)}>
               {label}
