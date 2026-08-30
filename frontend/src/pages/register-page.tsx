@@ -41,8 +41,8 @@ export function RegisterPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Criar conta</h1>
-        <p className="mt-1 text-sm text-text-secondary">Leva menos de um minuto.</p>
+        <h1 className="text-xl font-semibold tracking-[-0.025em] text-foreground">Criar conta</h1>
+        <p className="mt-1.5 text-sm text-text-secondary">Leva menos de um minuto.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -64,7 +64,7 @@ export function RegisterPage() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="flex flex-col gap-2">
             <Label htmlFor="register-password">Senha</Label>
             <Input
@@ -91,7 +91,7 @@ export function RegisterPage() {
           </div>
         </div>
 
-        {error && <p className="text-xs text-danger">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-sm text-danger">{error}</p>}
 
         <Button type="submit" className="mt-2 w-full" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}

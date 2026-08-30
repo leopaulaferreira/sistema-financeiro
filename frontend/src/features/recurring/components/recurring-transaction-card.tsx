@@ -16,7 +16,7 @@ interface RecurringTransactionCardProps {
 
 export function RecurringTransactionCard({ recurring, onEdit, onToggleActive, onDelete }: RecurringTransactionCardProps) {
   return (
-    <Card className="border-border bg-surface py-0 shadow-none transition-colors hover:bg-surface-hover">
+    <Card className="py-0 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong">
       <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 flex-col gap-1.5">
           <div className="flex flex-wrap items-center gap-2">

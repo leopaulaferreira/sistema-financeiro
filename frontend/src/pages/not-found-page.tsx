@@ -6,8 +6,8 @@ import { paths } from '@/routes/paths'
 export function NotFoundPage() {
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background px-4 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-surface-hover text-text-secondary">
-        <CompassIcon className="size-6" />
+      <div className="flex size-14 items-center justify-center rounded-2xl border border-border-strong bg-surface text-text-secondary shadow-[var(--shadow-card)]">
+        <CompassIcon className="size-6" strokeWidth={1.75} />
       </div>
       <div>
         <h1 className="text-xl font-semibold text-foreground">Página não encontrada</h1>

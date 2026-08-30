@@ -12,8 +12,14 @@ export function ProgressBar({ percentage, variant = 'success', className }: Prog
   const colorClass = variant === 'danger' ? 'bg-danger' : variant === 'warning' ? 'bg-warning' : 'bg-success'
 
   return (
-    <div className={cn('h-2 w-full overflow-hidden rounded-full bg-surface-hover', className)}>
-      <div className={cn('h-full rounded-full transition-all', colorClass)} style={{ width: `${clamped}%` }} />
+    <div
+      className={cn('h-1.5 w-full overflow-hidden rounded-full bg-surface-hover', className)}
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(clamped)}
+    >
+      <div className={cn('h-full rounded-full transition-[width] duration-200 ease-out', colorClass)} style={{ width: `${clamped}%` }} />
     </div>
   )
 }

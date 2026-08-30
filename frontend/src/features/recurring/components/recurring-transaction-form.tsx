@@ -216,7 +216,7 @@ export function RecurringTransactionForm({ recurring, onSuccess, onCancel }: Rec
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Valor" htmlFor="rt-amount" error={fieldErrors.amount}>
           <Input
             id="rt-amount"
@@ -243,7 +243,7 @@ export function RecurringTransactionForm({ recurring, onSuccess, onCancel }: Rec
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Categoria" htmlFor="rt-category" error={fieldErrors.categoryId}>
           <Select value={form.categoryId} onValueChange={(v) => update('categoryId', v)}>
             <SelectTrigger id="rt-category" className="w-full" aria-invalid={!!fieldErrors.categoryId}>
@@ -289,7 +289,7 @@ export function RecurringTransactionForm({ recurring, onSuccess, onCancel }: Rec
         </Select>
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Primeira execução" htmlFor="rt-start-date" error={fieldErrors.startDate}>
           <Input
             id="rt-start-date"
@@ -325,13 +325,13 @@ export function RecurringTransactionForm({ recurring, onSuccess, onCancel }: Rec
         </div>
       )}
 
-      {formError && <p className="text-xs text-danger">{formError}</p>}
+      {formError && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{formError}</p>}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
           Salvar recorrência
         </Button>

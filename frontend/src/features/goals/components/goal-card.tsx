@@ -18,13 +18,13 @@ export function GoalCard({ goal, onEdit, onDelete, onManageContributions }: Goal
   const progressVariant = goal.status === 'CANCELLED' ? 'warning' : 'success'
 
   return (
-    <Card className="border-border bg-surface py-0 shadow-none transition-colors hover:bg-surface-hover">
-      <CardContent className="flex flex-col gap-3 p-5">
+    <Card className="py-0 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong">
+      <CardContent className="flex min-h-48 flex-col gap-4 p-5">
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate text-sm font-medium text-foreground">{goal.name}</span>
             {goal.description && <span className="truncate text-xs text-text-secondary">{goal.description}</span>}
-            <span className="text-xs tabular-nums text-text-secondary">
+            <span className="financial-value mt-1 text-sm font-medium text-text-secondary">
               {formatCurrency(goal.currentAmount)} / {formatCurrency(goal.targetAmount)}
             </span>
           </div>

@@ -214,7 +214,7 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Valor" htmlFor="tx-amount" error={fieldErrors.amount}>
           <Input
             id="tx-amount"
@@ -236,7 +236,7 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
         </Field>
       </div>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Categoria" htmlFor="tx-category" error={fieldErrors.categoryId}>
           <Select value={form.categoryId} onValueChange={(v) => update('categoryId', v)}>
             <SelectTrigger id="tx-category" className="w-full" aria-invalid={!!fieldErrors.categoryId}>
@@ -286,13 +286,13 @@ export function TransactionForm({ transaction, onSuccess, onCancel }: Transactio
         <Textarea id="tx-note" value={form.notes} onChange={(e) => update('notes', e.target.value)} rows={3} />
       </Field>
 
-      {formError && <p className="text-xs text-danger">{formError}</p>}
+      {formError && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{formError}</p>}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
           Salvar transação
         </Button>
@@ -316,7 +316,7 @@ function Field({
     <div className="flex flex-col gap-2">
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {error && <p className="text-xs text-danger">{error}</p>}
+      {error && <p role="alert" className="text-xs text-danger">{error}</p>}
     </div>
   )
 }

@@ -18,8 +18,8 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   const expense = payload.find((p) => p.dataKey === 'expense')?.value ?? 0
 
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1.5 font-medium text-foreground">{formatShortDate(label)}</p>
+    <div className="rounded-xl border border-border-strong bg-popover px-3.5 py-3 text-xs shadow-[var(--shadow-elevated)]">
+      <p className="mb-2 font-semibold text-foreground">{formatShortDate(label)}</p>
       <p className="flex items-center gap-1.5 text-success">
         <span className="size-1.5 rounded-full bg-success" /> Receita: {formatCurrency(income)}
       </p>
@@ -32,7 +32,12 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
 
 export function FinancialChart({ data }: FinancialChartProps) {
   return (
-    <ResponsiveContainer width="100%" height={280}>
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center gap-5 text-xs font-medium text-text-secondary" aria-hidden>
+        <span className="flex items-center gap-2"><span className="h-0.5 w-5 rounded-full bg-success" />Receitas</span>
+        <span className="flex items-center gap-2"><span className="w-5 border-t-2 border-dashed border-danger" />Despesas</span>
+      </div>
+      <ResponsiveContainer width="100%" height={252}>
       <AreaChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
         <defs>
           <linearGradient id="incomeGradient" x1="0" y1="0" x2="0" y2="1">
@@ -44,12 +49,12 @@ export function FinancialChart({ data }: FinancialChartProps) {
             <stop offset="100%" stopColor="var(--danger)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="var(--border)" vertical={false} />
+        <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatShortDate}
           tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-          axisLine={{ stroke: 'var(--border)' }}
+          axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
           minTickGap={24}
@@ -62,9 +67,10 @@ export function FinancialChart({ data }: FinancialChartProps) {
           tickFormatter={(v: number) => (v === 0 ? '0' : `${Math.round(v / 100) / 10}k`)}
         />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-        <Area type="monotone" dataKey="income" name="Receita" stroke="var(--success)" strokeWidth={2} fill="url(#incomeGradient)" />
-        <Area type="monotone" dataKey="expense" name="Despesa" stroke="var(--danger)" strokeWidth={2} fill="url(#expenseGradient)" />
+        <Area type="monotone" dataKey="income" name="Receita" stroke="var(--success)" strokeWidth={2.25} fill="url(#incomeGradient)" activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} />
+        <Area type="monotone" dataKey="expense" name="Despesa" stroke="var(--danger)" strokeWidth={2.25} strokeDasharray="5 4" fill="url(#expenseGradient)" activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} />
       </AreaChart>
-    </ResponsiveContainer>
+      </ResponsiveContainer>
+    </div>
   )
 }

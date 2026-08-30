@@ -28,16 +28,16 @@ export function CategoryList({ categories, onEdit, onDelete }: CategoryListProps
   }
 
   return (
-    <ul className="flex flex-col gap-1">
+    <ul className="flex flex-col divide-y divide-border/70">
       {categories.map((category) => {
         const Icon = resolveIcon(category.icon)
         return (
           <li
             key={category.id}
-            className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-hover"
+            className="group/list-item -mx-2 flex min-h-14 items-center gap-3 rounded-lg px-3 py-2 transition-colors duration-150 hover:bg-surface-hover/55"
           >
             <div
-              className="flex size-9 shrink-0 items-center justify-center rounded-lg"
+              className="flex size-9 shrink-0 items-center justify-center rounded-xl border border-border"
               style={{ backgroundColor: `color-mix(in oklch, ${category.color} 16%, transparent)`, color: category.color }}
             >
               <Icon className="size-[18px]" aria-hidden />

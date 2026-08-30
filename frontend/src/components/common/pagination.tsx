@@ -11,8 +11,8 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
   if (totalPages <= 1) return null
 
   return (
-    <div className="flex items-center justify-between gap-4 pt-4">
-      <p className="text-sm text-text-secondary">
+    <div className="flex items-center justify-between gap-4 border-t border-border pt-4">
+      <p className="text-xs text-text-secondary sm:text-sm">
         Página <span className="font-medium text-foreground">{page}</span> de{' '}
         <span className="font-medium text-foreground">{totalPages}</span>
       </p>
@@ -20,7 +20,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         <Button
           variant="outline"
           size="icon"
-          className="border-border"
+          className="size-9"
           disabled={page <= 1}
           onClick={() => onPageChange(page - 1)}
           aria-label="Página anterior"
@@ -30,7 +30,7 @@ export function Pagination({ page, totalPages, onPageChange }: PaginationProps) 
         <Button
           variant="outline"
           size="icon"
-          className="border-border"
+          className="size-9"
           disabled={page >= totalPages}
           onClick={() => onPageChange(page + 1)}
           aria-label="Próxima página"

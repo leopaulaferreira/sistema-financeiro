@@ -84,9 +84,9 @@ export function GoalContributionsSheet({ open, onOpenChange, goal }: GoalContrib
           <SheetDescription>Registre valores acumulados para esta meta. Nenhuma transação é criada.</SheetDescription>
         </SheetHeader>
 
-        <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-4">
-          <form onSubmit={handleAdd} className="flex flex-col gap-3 rounded-lg border border-border p-3">
-            <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-1 flex-col gap-5 overflow-y-auto px-5 pb-5 sm:px-6 sm:pb-6">
+          <form onSubmit={handleAdd} className="flex flex-col gap-4 rounded-xl border border-border bg-surface-subtle p-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="contribution-amount">Valor</Label>
                 <Input id="contribution-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0,00" />
@@ -100,8 +100,8 @@ export function GoalContributionsSheet({ open, onOpenChange, goal }: GoalContrib
               <Label htmlFor="contribution-note">Observação (opcional)</Label>
               <Input id="contribution-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: 13º salário" />
             </div>
-            {error && <p className="text-xs text-danger">{error}</p>}
-            <Button type="submit" size="sm" className="w-fit self-end" disabled={addContribution.isPending}>
+            {error && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{error}</p>}
+            <Button type="submit" size="sm" className="w-full sm:w-fit sm:self-end" disabled={addContribution.isPending}>
               {addContribution.isPending && <Loader2 className="size-4 animate-spin" />}
               Adicionar
             </Button>
@@ -115,9 +115,9 @@ export function GoalContributionsSheet({ open, onOpenChange, goal }: GoalContrib
               </>
             ) : contributions && contributions.length > 0 ? (
               contributions.map((contribution) => (
-                <div key={contribution.id} className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2.5">
+                <div key={contribution.id} className="flex items-center justify-between gap-3 rounded-xl border border-border px-3.5 py-3 transition-colors duration-150 hover:border-border-strong hover:bg-surface-subtle">
                   <div className="flex min-w-0 flex-col">
-                    <span className="text-sm font-medium tabular-nums text-foreground">{formatCurrency(contribution.amount)}</span>
+                    <span className="financial-value text-sm font-semibold text-foreground">{formatCurrency(contribution.amount)}</span>
                     <span className="truncate text-xs text-text-secondary">
                       {formatDate(contribution.date)}
                       {contribution.note && ` · ${contribution.note}`}

@@ -114,13 +114,13 @@ function PaymentMethodForm({ paymentMethod, onDone }: { paymentMethod?: PaymentM
         {fieldErrors.type && <p className="text-xs text-danger">{fieldErrors.type}</p>}
       </div>
 
-      {formError && <p className="text-xs text-danger">{formError}</p>}
+      {formError && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{formError}</p>}
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onDone} disabled={submitting}>
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onDone} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
           {paymentMethod ? 'Salvar alterações' : 'Criar método'}
         </Button>

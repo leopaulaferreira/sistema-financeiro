@@ -11,27 +11,35 @@
  * :root já refletem o tema final.
  */
 :root {
-  --background: oklch(0.16 0.014 265);
-  --foreground: oklch(0.96 0.004 265);
+  --background: oklch(0.145 0.014 274);
+  --foreground: oklch(0.965 0.006 270);
 
-  --surface: oklch(0.21 0.016 265);
-  --surface-hover: oklch(0.25 0.018 265);
+  --surface: oklch(0.185 0.016 272);
+  --surface-hover: oklch(0.225 0.019 272);
+  --surface-elevated: oklch(0.205 0.018 272);
+  --surface-subtle: oklch(0.165 0.015 272);
 
   --card: var(--surface);
   --card-foreground: var(--foreground);
-  --popover: oklch(0.23 0.017 265);
+  --popover: var(--surface-elevated);
   --popover-foreground: var(--foreground);
 
   --text-primary: var(--foreground);
-  --text-secondary: oklch(0.68 0.02 265);
+  --text-secondary: oklch(0.71 0.017 270);
+  --text-tertiary: oklch(0.57 0.015 270);
 
-  --accent-primary: oklch(0.64 0.19 293);
+  --accent-primary: oklch(0.67 0.185 292);
+  --accent-primary-hover: oklch(0.71 0.17 292);
   --accent-primary-foreground: oklch(0.99 0 0);
   --accent-secondary: oklch(0.78 0.12 210);
   --accent-secondary-foreground: oklch(0.16 0.014 265);
 
-  --primary: var(--accent-primary);
-  --primary-foreground: var(--accent-primary-foreground);
+  /* Ações primárias usam um violeta mais profundo que o accent informativo.
+     Isso mantém CTAs sólidos e legíveis sem contaminar gráficos e navegação. */
+  --primary: oklch(0.56 0.215 292);
+  --primary-hover: oklch(0.605 0.215 292);
+  --primary-pressed: oklch(0.515 0.205 292);
+  --primary-foreground: oklch(0.99 0 0);
   --secondary: var(--surface-hover);
   --secondary-foreground: var(--foreground);
 
@@ -40,9 +48,9 @@
   --accent: var(--surface-hover);
   --accent-foreground: var(--foreground);
 
-  --success: oklch(0.72 0.17 149);
+  --success: oklch(0.74 0.15 151);
   --success-foreground: oklch(0.16 0.014 265);
-  --danger: oklch(0.65 0.21 25);
+  --danger: oklch(0.7 0.18 24);
   --danger-foreground: oklch(0.99 0 0);
   --warning: oklch(0.79 0.15 80);
   --warning-foreground: oklch(0.16 0.014 265);
@@ -50,9 +58,13 @@
   --destructive: var(--danger);
   --destructive-foreground: var(--danger-foreground);
 
-  --border: oklch(1 0 0 / 9%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: oklch(0.64 0.19 293 / 55%);
+  --border: oklch(1 0 0 / 8%);
+  --border-strong: oklch(1 0 0 / 14%);
+  --input: oklch(1 0 0 / 11%);
+  --ring: oklch(0.67 0.185 292 / 52%);
+
+  --shadow-card: 0 1px 0 oklch(1 0 0 / 3%) inset, 0 14px 32px -24px oklch(0 0 0 / 70%);
+  --shadow-elevated: 0 1px 0 oklch(1 0 0 / 4%) inset, 0 24px 56px -24px oklch(0 0 0 / 82%);
 
   --chart-1: var(--accent-primary);
   --chart-2: var(--accent-secondary);
@@ -62,7 +74,7 @@
 
   --radius: 0.75rem;
 
-  --sidebar: oklch(0.14 0.013 265);
+  --sidebar: oklch(0.125 0.014 274);
   --sidebar-foreground: var(--foreground);
   --sidebar-primary: var(--accent-primary);
   --sidebar-primary-foreground: var(--accent-primary-foreground);
@@ -75,8 +87,8 @@
 /* Compat: caso alguma marcação use a classe .dark explicitamente, os
    valores permanecem os mesmos — não existe tema claro nesta fase. */
 .dark {
-  --background: oklch(0.16 0.014 265);
-  --foreground: oklch(0.96 0.004 265);
+  --background: oklch(0.145 0.014 274);
+  --foreground: oklch(0.965 0.006 270);
 }
 
 @theme inline {
@@ -87,6 +99,8 @@
   --color-foreground: var(--foreground);
   --color-surface: var(--surface);
   --color-surface-hover: var(--surface-hover);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-subtle: var(--surface-subtle);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-popover: var(--popover);
@@ -94,6 +108,7 @@
 
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
+  --color-text-tertiary: var(--text-tertiary);
 
   --color-accent-primary: var(--accent-primary);
   --color-accent-primary-foreground: var(--accent-primary-foreground);
@@ -119,6 +134,7 @@
   --color-destructive-foreground: var(--destructive-foreground);
 
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
 
@@ -149,7 +165,8 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    min-width: 320px;
   }
   html {
     @apply font-sans;
@@ -158,11 +175,41 @@
   ::selection {
     background: color-mix(in oklch, var(--accent-primary) 35%, transparent);
   }
+  button,
+  a,
+  input,
+  textarea,
+  [role='button'] {
+    -webkit-tap-highlight-color: transparent;
+  }
+  :focus-visible {
+    scroll-margin: 6rem;
+  }
 }
 
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;
-    scrollbar-color: var(--border) transparent;
+    scrollbar-color: var(--border-strong) transparent;
+  }
+  .financial-value {
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.025em;
+  }
+  .surface-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    box-shadow: var(--shadow-card);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

@@ -2,6 +2,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useCategoriesQuery } from '@/features/categories/hooks/use-categories'
 import { useAccountsQuery } from '@/features/accounts/hooks/use-accounts'
 import type { TransactionFiltersState } from './transaction-filters.types'
+import { ListFilter } from 'lucide-react'
 
 interface TransactionFiltersProps {
   value: TransactionFiltersState
@@ -13,9 +14,13 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
   const { data: accounts } = useAccountsQuery()
 
   return (
-    <div className="flex flex-wrap gap-3">
+    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-surface-subtle p-3">
+      <div className="flex h-10 items-center gap-2 px-1 text-xs font-semibold text-text-secondary">
+        <ListFilter className="size-4 text-text-tertiary" aria-hidden />
+        <span>Filtros</span>
+      </div>
       <Select value={value.period} onValueChange={(period: TransactionFiltersState['period']) => onChange({ ...value, period })}>
-        <SelectTrigger className="w-full border-border bg-surface sm:w-40" aria-label="Período">
+        <SelectTrigger className="w-full bg-surface sm:w-40" aria-label="Período">
           <SelectValue placeholder="Período" />
         </SelectTrigger>
         <SelectContent>
@@ -26,7 +31,7 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
       </Select>
 
       <Select value={value.type} onValueChange={(type: TransactionFiltersState['type']) => onChange({ ...value, type })}>
-        <SelectTrigger className="w-full border-border bg-surface sm:w-40" aria-label="Tipo">
+        <SelectTrigger className="w-full bg-surface sm:w-40" aria-label="Tipo">
           <SelectValue placeholder="Tipo" />
         </SelectTrigger>
         <SelectContent>
@@ -37,7 +42,7 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
       </Select>
 
       <Select value={value.categoryId} onValueChange={(categoryId) => onChange({ ...value, categoryId })}>
-        <SelectTrigger className="w-full border-border bg-surface sm:w-44" aria-label="Categoria">
+        <SelectTrigger className="w-full bg-surface sm:w-44" aria-label="Categoria">
           <SelectValue placeholder="Categoria" />
         </SelectTrigger>
         <SelectContent>
@@ -51,7 +56,7 @@ export function TransactionFilters({ value, onChange }: TransactionFiltersProps)
       </Select>
 
       <Select value={value.accountId} onValueChange={(accountId) => onChange({ ...value, accountId })}>
-        <SelectTrigger className="w-full border-border bg-surface sm:w-40" aria-label="Conta">
+        <SelectTrigger className="w-full bg-surface sm:w-40" aria-label="Conta">
           <SelectValue placeholder="Conta" />
         </SelectTrigger>
         <SelectContent>

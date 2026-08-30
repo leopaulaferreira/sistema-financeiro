@@ -31,8 +31,8 @@ export function LoginPage() {
   return (
     <div className="flex flex-col gap-6">
       <div>
-        <h1 className="text-lg font-semibold tracking-tight text-foreground">Entrar</h1>
-        <p className="mt-1 text-sm text-text-secondary">Acesse sua conta para continuar.</p>
+        <h1 className="text-xl font-semibold tracking-[-0.025em] text-foreground">Entrar</h1>
+        <p className="mt-1.5 text-sm text-text-secondary">Acesse sua conta para continuar.</p>
       </div>
 
       <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -62,7 +62,7 @@ export function LoginPage() {
           />
         </div>
 
-        {error && <p className="text-sm text-danger">{error}</p>}
+        {error && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-sm text-danger">{error}</p>}
 
         <Button type="submit" className="mt-2 w-full" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
