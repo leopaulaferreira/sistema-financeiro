@@ -151,7 +151,7 @@ function CategoryForm({
               aria-label={`Selecionar ícone ${key}`}
               aria-pressed={icon === key}
               className={cn(
-                'flex size-9 items-center justify-center rounded-lg border text-text-secondary transition-colors hover:bg-surface-hover',
+                'flex size-10 items-center justify-center rounded-lg border text-text-secondary transition-[color,background-color,border-color,transform] duration-200 hover:-translate-y-0.5 hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45',
                 icon === key ? 'border-accent-primary bg-accent-primary/12 text-accent-primary' : 'border-border',
               )}
             >
@@ -171,7 +171,7 @@ function CategoryForm({
               onClick={() => setColor(c)}
               aria-label={`Selecionar cor ${c}`}
               aria-pressed={color === c}
-              className="size-7 rounded-full transition-shadow"
+              className="size-8 rounded-full border-2 border-transparent transition-[box-shadow,transform] duration-200 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/45"
               style={{ backgroundColor: c, boxShadow: color === c ? `0 0 0 2px var(--surface), 0 0 0 4px ${c}` : undefined }}
             />
           ))}
@@ -179,13 +179,13 @@ function CategoryForm({
         {fieldErrors.color && <p className="text-xs text-danger">{fieldErrors.color}</p>}
       </div>
 
-      {formError && <p className="text-xs text-danger">{formError}</p>}
+      {formError && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-xs text-danger">{formError}</p>}
 
-      <div className="flex justify-end gap-2 pt-1">
-        <Button type="button" variant="ghost" onClick={onDone} disabled={submitting}>
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onDone} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
           {category ? 'Salvar alterações' : 'Criar categoria'}
         </Button>

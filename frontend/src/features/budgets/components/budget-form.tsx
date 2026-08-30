@@ -144,7 +144,7 @@ export function BudgetForm({ budget, defaultYear, defaultMonth, onSuccess, onCan
         />
       </Field>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Mês" htmlFor="budget-month">
           <Select value={String(form.month)} onValueChange={(v) => update('month', Number(v))}>
             <SelectTrigger id="budget-month" className="w-full">
@@ -177,11 +177,11 @@ export function BudgetForm({ budget, defaultYear, defaultMonth, onSuccess, onCan
 
       {formError && <p className="text-xs text-danger">{formError}</p>}
 
-      <div className="flex justify-end gap-2 pt-2">
-        <Button type="button" variant="ghost" onClick={onCancel} disabled={submitting}>
+      <div className="flex flex-col-reverse gap-2 border-t border-border pt-5 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" className="w-full sm:w-auto" onClick={onCancel} disabled={submitting}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={submitting}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={submitting}>
           {submitting && <Loader2 className="size-4 animate-spin" />}
           Salvar orçamento
         </Button>
