@@ -26,14 +26,16 @@ export function StatCard({ label, value, icon: Icon, tone = 'neutral', hint }: S
   return (
     <Card className="relative py-0 transition-[border-color,transform] duration-200 hover:-translate-y-0.5 hover:border-border-strong">
       <span className={cn('absolute inset-y-5 left-0 w-0.5 rounded-r-full', toneAccents[tone])} aria-hidden />
-      <CardContent className="flex min-h-32 items-start justify-between gap-4 p-5 pl-6">
-        <div className="flex min-w-0 flex-col gap-2">
-          <span className="text-[0.6875rem] font-semibold tracking-[0.055em] text-text-secondary uppercase">{label}</span>
-          <span className="financial-value truncate text-2xl font-semibold text-foreground sm:text-[1.625rem]">{value}</span>
-          {hint && <span className="text-xs text-text-tertiary">{hint}</span>}
+      <CardContent className="flex min-h-32 flex-col gap-2 p-5 pl-6">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-[0.6875rem] font-semibold tracking-[0.055em] text-text-secondary uppercase">{label}</span>
+          <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl border', toneStyles[tone])}>
+            <Icon className="size-[18px]" aria-hidden />
+          </div>
         </div>
-        <div className={cn('flex size-10 shrink-0 items-center justify-center rounded-xl border', toneStyles[tone])}>
-          <Icon className="size-[18px]" aria-hidden />
+        <div className="flex min-w-0 flex-col gap-1.5">
+          <span className="financial-value whitespace-nowrap text-[1.35rem] font-semibold text-foreground 2xl:text-[1.625rem]">{value}</span>
+          {hint && <span className="text-xs text-text-tertiary">{hint}</span>}
         </div>
       </CardContent>
     </Card>
