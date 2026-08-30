@@ -10,9 +10,9 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   if (!active || !payload?.length || !label) return null
 
   return (
-    <div className="rounded-lg border border-border bg-popover px-3 py-2 text-xs shadow-lg">
-      <p className="mb-1 font-medium text-foreground">{formatShortDate(label)}</p>
-      <p className="text-text-secondary">{formatCurrency(payload[0].value)}</p>
+    <div className="rounded-xl border border-border-strong bg-popover px-3.5 py-3 text-xs shadow-[var(--shadow-elevated)]">
+      <p className="mb-1.5 font-semibold text-foreground">{formatShortDate(label)}</p>
+      <p className="financial-value font-medium text-accent-primary">{formatCurrency(payload[0].value)}</p>
     </div>
   )
 }
@@ -27,12 +27,12 @@ export function BalanceEvolutionChart({ data }: BalanceEvolutionChartProps) {
             <stop offset="100%" stopColor="var(--accent-primary)" stopOpacity={0} />
           </linearGradient>
         </defs>
-        <CartesianGrid stroke="var(--border)" vertical={false} />
+        <CartesianGrid stroke="var(--border)" strokeDasharray="4 4" vertical={false} />
         <XAxis
           dataKey="date"
           tickFormatter={formatShortDate}
           tick={{ fill: 'var(--text-secondary)', fontSize: 12 }}
-          axisLine={{ stroke: 'var(--border)' }}
+          axisLine={false}
           tickLine={false}
           interval="preserveStartEnd"
           minTickGap={24}
@@ -45,7 +45,7 @@ export function BalanceEvolutionChart({ data }: BalanceEvolutionChartProps) {
           tickFormatter={(v: number) => (v === 0 ? '0' : `${Math.round(v / 100) / 10}k`)}
         />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: 'var(--border)', strokeWidth: 1 }} />
-        <Area type="monotone" dataKey="balance" name="Saldo" stroke="var(--accent-primary)" strokeWidth={2} fill="url(#balanceGradient)" />
+        <Area type="monotone" dataKey="balance" name="Saldo" stroke="var(--accent-primary)" strokeWidth={2.25} fill="url(#balanceGradient)" activeDot={{ r: 4, strokeWidth: 2, fill: 'var(--surface)' }} />
       </AreaChart>
     </ResponsiveContainer>
   )
