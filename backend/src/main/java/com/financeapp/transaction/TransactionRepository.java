@@ -62,6 +62,23 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             """)
     PeriodTotals sumIncomeAndExpenseForAvailableAccounts(@Param("userId") Long userId, @Param("to") LocalDate to);
 
+    /**
+     * Igual à {@link #sumIncomeAndExpense}, mas sem nenhum limite de data —
+     * usada pelo Dashboard quando o usuário escolhe "todos os meses" em vez
+     * de um mês específico (ao contrário de
+     * {@link #sumIncomeAndExpenseForAvailableAccounts}, inclui todas as
+     * contas, inclusive CREDIT_CARD, pois aqui o total é receita/despesa
+     * bruta do período, não disponibilidade de caixa).
+     */
+    @Query("""
+            select new com.financeapp.transaction.dto.PeriodTotals(
+                sum(case when t.type = com.financeapp.common.TransactionType.INCOME then t.amount end),
+                sum(case when t.type = com.financeapp.common.TransactionType.EXPENSE then t.amount end))
+            from Transaction t
+            where t.user.id = :userId
+            """)
+    PeriodTotals sumIncomeAndExpenseAllTime(@Param("userId") Long userId);
+
     /** Só retorna categorias com pelo menos uma despesa no período — lista vazia se não houver nenhuma. */
     @Query("""
             select new com.financeapp.transaction.dto.CategoryAmount(c.id, c.name, sum(t.amount))
@@ -72,6 +89,16 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             order by sum(t.amount) desc
             """)
     List<CategoryAmount> sumExpensesByCategory(@Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /** Igual à {@link #sumExpensesByCategory}, mas sem limite de data — modo "todos os meses" do Dashboard. */
+    @Query("""
+            select new com.financeapp.transaction.dto.CategoryAmount(c.id, c.name, sum(t.amount))
+            from Transaction t join t.category c
+            where t.user.id = :userId and t.type = com.financeapp.common.TransactionType.EXPENSE
+            group by c.id, c.name
+            order by sum(t.amount) desc
+            """)
+    List<CategoryAmount> sumExpensesByCategoryAllTime(@Param("userId") Long userId);
 
     /** Só retorna dias com pelo menos uma transação — dias sem movimentação são preenchidos pelo Service. */
     @Query("""
@@ -84,6 +111,23 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
             order by t.date
             """)
     List<DailyTotals> sumDailyTotals(@Param("userId") Long userId, @Param("from") LocalDate from, @Param("to") LocalDate to);
+
+    /**
+     * Igual à {@link #sumDailyTotals}, mas sem limite de data — modo "todos
+     * os meses" do Dashboard. O Service funde estas linhas em buckets
+     * mensais (o volume diário de um usuário pessoa física não justifica
+     * uma query agregada por mês em SQL).
+     */
+    @Query("""
+            select new com.financeapp.transaction.dto.DailyTotals(t.date,
+                sum(case when t.type = com.financeapp.common.TransactionType.INCOME then t.amount end),
+                sum(case when t.type = com.financeapp.common.TransactionType.EXPENSE then t.amount end))
+            from Transaction t
+            where t.user.id = :userId
+            group by t.date
+            order by t.date
+            """)
+    List<DailyTotals> sumDailyTotalsAllTime(@Param("userId") Long userId);
 
     /**
      * Totais de receita/despesa por conta, cumulativos (sem filtro de data)

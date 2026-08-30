@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
@@ -47,14 +48,20 @@ public class DashboardService {
         this.accountRepository = accountRepository;
     }
 
+    /**
+     * {@code year}/{@code month} nulos = modo "todos os meses": agrega
+     * desde a primeira transação do usuário, sem recorte mensal.
+     */
     @Transactional(readOnly = true)
-    public DashboardSummaryResponse summary(Long userId, int year, int month) {
-        LocalDate from = firstDayOf(year, month);
-        LocalDate to = from.plusMonths(1);
+    public DashboardSummaryResponse summary(Long userId, Integer year, Integer month) {
+        boolean allTime = year == null || month == null;
+        LocalDate to = allTime ? LocalDate.now().plusDays(1) : firstDayOf(year, month).plusMonths(1);
 
-        PeriodTotals monthTotals = transactionRepository.sumIncomeAndExpense(userId, from, to);
-        BigDecimal totalIncome = nz(monthTotals.income());
-        BigDecimal totalExpenses = nz(monthTotals.expense());
+        PeriodTotals totals = allTime
+                ? transactionRepository.sumIncomeAndExpenseAllTime(userId)
+                : transactionRepository.sumIncomeAndExpense(userId, firstDayOf(year, month), to);
+        BigDecimal totalIncome = nz(totals.income());
+        BigDecimal totalExpenses = nz(totals.expense());
         BigDecimal netSavings = totalIncome.subtract(totalExpenses);
 
         BigDecimal availableBalance = availableBalanceAsOf(userId, to);
@@ -63,11 +70,11 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<CategoryExpenseResponse> expensesByCategory(Long userId, int year, int month) {
-        LocalDate from = firstDayOf(year, month);
-        LocalDate to = from.plusMonths(1);
-
-        List<CategoryAmount> rows = transactionRepository.sumExpensesByCategory(userId, from, to);
+    public List<CategoryExpenseResponse> expensesByCategory(Long userId, Integer year, Integer month) {
+        boolean allTime = year == null || month == null;
+        List<CategoryAmount> rows = allTime
+                ? transactionRepository.sumExpensesByCategoryAllTime(userId)
+                : transactionRepository.sumExpensesByCategory(userId, firstDayOf(year, month), firstDayOf(year, month).plusMonths(1));
         BigDecimal total = rows.stream().map(CategoryAmount::amount).reduce(BigDecimal.ZERO, BigDecimal::add);
 
         return rows.stream()
@@ -77,7 +84,11 @@ public class DashboardService {
     }
 
     @Transactional(readOnly = true)
-    public List<DailyIncomeExpenseResponse> incomeVsExpense(Long userId, int year, int month) {
+    public List<DailyIncomeExpenseResponse> incomeVsExpense(Long userId, Integer year, Integer month) {
+        if (year == null || month == null) {
+            return monthlySeriesAllTime(userId);
+        }
+
         LocalDate from = firstDayOf(year, month);
         LocalDate to = from.plusMonths(1);
 
@@ -90,6 +101,38 @@ public class DashboardService {
             BigDecimal income = row == null ? BigDecimal.ZERO : nz(row.income());
             BigDecimal expense = row == null ? BigDecimal.ZERO : nz(row.expense());
             result.add(new DailyIncomeExpenseResponse(date, income, expense));
+        }
+        return result;
+    }
+
+    /**
+     * Modo "todos os meses" da evolução receita/despesa: um ponto por mês
+     * (não por dia, para não gerar séries enormes em contas com anos de
+     * histórico), do primeiro ao último mês com transações. Mesma técnica
+     * de fusão em Java de {@code ReportService.monthlySeries}.
+     */
+    private List<DailyIncomeExpenseResponse> monthlySeriesAllTime(Long userId) {
+        List<DailyTotals> rows = transactionRepository.sumDailyTotalsAllTime(userId);
+        if (rows.isEmpty()) {
+            return List.of();
+        }
+
+        Map<LocalDate, BigDecimal> incomeByMonth = new LinkedHashMap<>();
+        Map<LocalDate, BigDecimal> expenseByMonth = new LinkedHashMap<>();
+        LocalDate minMonth = null;
+        LocalDate maxMonth = null;
+        for (DailyTotals row : rows) {
+            LocalDate monthStart = row.date().withDayOfMonth(1);
+            incomeByMonth.merge(monthStart, nz(row.income()), BigDecimal::add);
+            expenseByMonth.merge(monthStart, nz(row.expense()), BigDecimal::add);
+            minMonth = minMonth == null || monthStart.isBefore(minMonth) ? monthStart : minMonth;
+            maxMonth = maxMonth == null || monthStart.isAfter(maxMonth) ? monthStart : maxMonth;
+        }
+
+        List<DailyIncomeExpenseResponse> result = new ArrayList<>();
+        for (LocalDate cursor = minMonth; !cursor.isAfter(maxMonth); cursor = cursor.plusMonths(1)) {
+            result.add(new DailyIncomeExpenseResponse(
+                    cursor, incomeByMonth.getOrDefault(cursor, BigDecimal.ZERO), expenseByMonth.getOrDefault(cursor, BigDecimal.ZERO)));
         }
         return result;
     }
