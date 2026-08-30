@@ -129,6 +129,32 @@ class DashboardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void summary_totalMode_aggregatesAcrossAllMonthsWhenYearAndMonthAreOmitted() throws Exception {
+        Fixture f = setUpFixture("sum-total");
+        createTransaction(f, TransactionType.INCOME, BigDecimal.valueOf(200), LocalDate.of(2020, 1, 10));
+        createTransaction(f, TransactionType.EXPENSE, BigDecimal.valueOf(50), LocalDate.of(2020, 2, 15));
+        createTransaction(f, TransactionType.INCOME, BigDecimal.valueOf(300), LocalDate.of(2020, 3, 1));
+
+        mockMvc.perform(authed(get("/api/dashboard/summary"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalIncome").value(500))
+                .andExpect(jsonPath("$.totalExpenses").value(50))
+                .andExpect(jsonPath("$.netSavings").value(450))
+                .andExpect(jsonPath("$.availableBalance").value(550)); // 100 (inicial) + 500 - 50, sem recorte de mês
+    }
+
+    @Test
+    void summary_totalMode_withNoData_returnsAllZerosExceptInitialBalance() throws Exception {
+        Fixture f = setUpFixture("sum-total-empty");
+
+        mockMvc.perform(authed(get("/api/dashboard/summary"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalIncome").value(0))
+                .andExpect(jsonPath("$.totalExpenses").value(0))
+                .andExpect(jsonPath("$.availableBalance").value(100));
+    }
+
+    @Test
     void summary_availableBalanceExcludesCreditCardAccounts() throws Exception {
         Fixture f = setUpFixture("sum-cc");
         AccountResponse creditCard = createAccount(f.session(), "Cartão", AccountType.CREDIT_CARD, BigDecimal.valueOf(-300));
@@ -180,6 +206,28 @@ class DashboardControllerIntegrationTest extends AbstractIntegrationTest {
     }
 
     @Test
+    void expensesByCategory_totalMode_aggregatesAcrossAllMonthsWhenYearAndMonthAreOmitted() throws Exception {
+        Fixture f = setUpFixture("cat-total");
+        CategoryResponse transporte = createCategory(f.session(), "Transporte", TransactionType.EXPENSE);
+
+        createTransaction(f, TransactionType.EXPENSE, BigDecimal.valueOf(10), LocalDate.of(2020, 1, 1));
+        createTransaction(f, TransactionType.EXPENSE, BigDecimal.valueOf(20), LocalDate.of(2020, 2, 2)); // Alimentação: 30 total
+        mockMvc.perform(authed(post("/api/transactions"), f.session())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(new TransactionRequest("Uber", BigDecimal.valueOf(50), TransactionType.EXPENSE,
+                                LocalDate.of(2020, 3, 3), transporte.id(), f.account().id(), f.paymentMethod().id(), null))))
+                .andExpect(status().isCreated());
+
+        mockMvc.perform(authed(get("/api/dashboard/expenses-by-category"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].categoryName").value("Transporte"))
+                .andExpect(jsonPath("$[0].amount").value(50))
+                .andExpect(jsonPath("$[1].categoryName").value("Alimentação"))
+                .andExpect(jsonPath("$[1].amount").value(30));
+    }
+
+    @Test
     void expensesByCategory_isIsolatedBetweenUsers() throws Exception {
         Fixture owner = setUpFixture("cat-owner");
         createTransaction(owner, TransactionType.EXPENSE, BigDecimal.valueOf(80), LocalDate.of(2026, 8, 1));
@@ -214,6 +262,37 @@ class DashboardControllerIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[2].income").value(0))
                 .andExpect(jsonPath("$[2].expense").value(0))
                 .andExpect(jsonPath("$[30].date").value("2026-08-31"));
+    }
+
+    @Test
+    void incomeVsExpense_totalMode_groupsByMonthAcrossYearsWhenYearAndMonthAreOmitted() throws Exception {
+        Fixture f = setUpFixture("ive-total");
+        createTransaction(f, TransactionType.INCOME, BigDecimal.valueOf(500), LocalDate.of(2020, 1, 5));
+        // fevereiro sem nenhuma transação — deve aparecer com zero, não ausente
+        createTransaction(f, TransactionType.EXPENSE, BigDecimal.valueOf(80), LocalDate.of(2020, 3, 10));
+
+        mockMvc.perform(authed(get("/api/dashboard/income-vs-expense"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(3)) // jan/fev/mar de 2020 — um ponto por mês, não por dia
+                .andExpect(jsonPath("$[0].date").value("2020-01-01"))
+                .andExpect(jsonPath("$[0].income").value(500))
+                .andExpect(jsonPath("$[0].expense").value(0))
+                .andExpect(jsonPath("$[1].date").value("2020-02-01"))
+                .andExpect(jsonPath("$[1].income").value(0))
+                .andExpect(jsonPath("$[1].expense").value(0))
+                .andExpect(jsonPath("$[2].date").value("2020-03-01"))
+                .andExpect(jsonPath("$[2].income").value(0))
+                .andExpect(jsonPath("$[2].expense").value(80));
+    }
+
+    @Test
+    void incomeVsExpense_totalMode_withNoData_returnsEmptyList() throws Exception {
+        Fixture f = setUpFixture("ive-total-empty");
+
+        mockMvc.perform(authed(get("/api/dashboard/income-vs-expense"), f.session()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$").isArray())
+                .andExpect(jsonPath("$.length()").value(0));
     }
 
     @Test

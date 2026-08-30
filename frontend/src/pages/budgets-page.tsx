@@ -23,11 +23,11 @@ import { BudgetFormDialog } from '@/features/budgets/components/budget-form-dial
 import { useBudgetsQuery, useDeleteBudget } from '@/features/budgets/hooks/use-budgets'
 import { formatCurrency } from '@/lib/format'
 import { friendlyErrorMessage } from '@/services/api-error'
-import type { DashboardPeriod } from '@/services/dashboard-service'
+import type { MonthPeriod } from '@/services/dashboard-service'
 import type { Budget } from '@/types/finance'
 
 export function BudgetsPage() {
-  const [period, setPeriod] = useState<DashboardPeriod>(() => {
+  const [period, setPeriod] = useState<MonthPeriod>(() => {
     const now = new Date()
     return { year: now.getFullYear(), month: now.getMonth() + 1 }
   })

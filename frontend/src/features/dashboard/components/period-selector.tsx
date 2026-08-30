@@ -1,5 +1,5 @@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import type { DashboardPeriod } from '@/services/dashboard-service'
+import type { MonthPeriod } from '@/services/dashboard-service'
 
 const MONTH_LABELS = [
   'Janeiro',
@@ -17,8 +17,8 @@ const MONTH_LABELS = [
 ]
 
 interface PeriodSelectorProps {
-  value: DashboardPeriod
-  onChange: (period: DashboardPeriod) => void
+  value: MonthPeriod
+  onChange: (period: MonthPeriod) => void
 }
 
 export function PeriodSelector({ value, onChange }: PeriodSelectorProps) {

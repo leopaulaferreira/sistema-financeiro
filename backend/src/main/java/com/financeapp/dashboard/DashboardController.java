@@ -30,22 +30,22 @@ public class DashboardController {
 
     @GetMapping("/summary")
     public DashboardSummaryResponse summary(@AuthenticationPrincipal AuthenticatedUser principal,
-                                             @RequestParam @Min(1) int year,
-                                             @RequestParam @Min(1) @Max(12) int month) {
+                                             @RequestParam(required = false) @Min(1) Integer year,
+                                             @RequestParam(required = false) @Min(1) @Max(12) Integer month) {
         return dashboardService.summary(principal.id(), year, month);
     }
 
     @GetMapping("/expenses-by-category")
     public List<CategoryExpenseResponse> expensesByCategory(@AuthenticationPrincipal AuthenticatedUser principal,
-                                                              @RequestParam @Min(1) int year,
-                                                              @RequestParam @Min(1) @Max(12) int month) {
+                                                              @RequestParam(required = false) @Min(1) Integer year,
+                                                              @RequestParam(required = false) @Min(1) @Max(12) Integer month) {
         return dashboardService.expensesByCategory(principal.id(), year, month);
     }
 
     @GetMapping("/income-vs-expense")
     public List<DailyIncomeExpenseResponse> incomeVsExpense(@AuthenticationPrincipal AuthenticatedUser principal,
-                                                              @RequestParam @Min(1) int year,
-                                                              @RequestParam @Min(1) @Max(12) int month) {
+                                                              @RequestParam(required = false) @Min(1) Integer year,
+                                                              @RequestParam(required = false) @Min(1) @Max(12) Integer month) {
         return dashboardService.incomeVsExpense(principal.id(), year, month);
     }
 
