@@ -11,8 +11,8 @@ import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
 export function LoginPage() {
   const navigate = useNavigate()
   const { login } = useAuth()
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
+  const [email, setEmail] = useState('user@gmail.com')
+  const [password, setPassword] = useState('123456789')
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
