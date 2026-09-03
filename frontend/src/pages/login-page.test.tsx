@@ -26,12 +26,30 @@ function renderLoginPage() {
 }
 
 describe('LoginPage', () => {
+  it('pre-fills the demo account credentials so a visitor can log in with one click', async () => {
+    loginMock.mockResolvedValueOnce(undefined)
+    const user = userEvent.setup()
+    renderLoginPage()
+
+    expect(screen.getByLabelText('E-mail')).toHaveValue('user@gmail.com')
+    expect(screen.getByLabelText('Senha')).toHaveValue('123456789')
+
+    await user.click(screen.getByRole('button', { name: /entrar/i }))
+
+    await waitFor(() => {
+      expect(loginMock).toHaveBeenCalledWith({ email: 'user@gmail.com', password: '123456789' })
+    })
+    await waitFor(() => expect(navigateMock).toHaveBeenCalledWith('/'))
+  })
+
   it('submits the typed credentials and navigates to the dashboard on success', async () => {
     loginMock.mockResolvedValueOnce(undefined)
     const user = userEvent.setup()
     renderLoginPage()
 
+    await user.clear(screen.getByLabelText('E-mail'))
     await user.type(screen.getByLabelText('E-mail'), 'ana@example.com')
+    await user.clear(screen.getByLabelText('Senha'))
     await user.type(screen.getByLabelText('Senha'), 'senha1234')
     await user.click(screen.getByRole('button', { name: /entrar/i }))
 
@@ -46,7 +64,9 @@ describe('LoginPage', () => {
     const user = userEvent.setup()
     renderLoginPage()
 
+    await user.clear(screen.getByLabelText('E-mail'))
     await user.type(screen.getByLabelText('E-mail'), 'ana@example.com')
+    await user.clear(screen.getByLabelText('Senha'))
     await user.type(screen.getByLabelText('Senha'), 'senhaerrada')
     await user.click(screen.getByRole('button', { name: /entrar/i }))
 
