@@ -39,8 +39,8 @@ export function AppRoutes() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route element={<PublicOnlyRoute />}>
+          <Route path={paths.login} element={<LoginPage />} />
           <Route element={<AuthLayout />}>
-            <Route path={paths.login} element={<LoginPage />} />
             <Route path={paths.register} element={<RegisterPage />} />
           </Route>
         </Route>
