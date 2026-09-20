@@ -88,10 +88,7 @@ jobs:
           printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null
 
-      # Isolado num step próprio (antes do upload) para que REMOTE_DIR já
-      # esteja em $GITHUB_ENV mesmo se o step de upload falhar no meio —
-      # o step de cleanup (if: always()) precisa dele pra não deixar lixo
-      # órfão em /tmp na VM.
+
       - name: Compute remote deploy dir
         run: |
           STAMP="$(date -u +%Y%m%d-%H%M%S)-${{ github.run_id }}"
