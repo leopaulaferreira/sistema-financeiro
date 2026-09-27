@@ -1,130 +1,56 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Eye, EyeOff, Loader2, Lock, Mail, TrendingUp, Wallet2 } from 'lucide-react'
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, ChartNoAxesCombined, Check, Eye, EyeOff, Loader2, Lock, Mail, Target, Wallet2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { paths } from '@/routes/paths'
 import { useAuth } from '@/features/auth/auth-context'
 import { ApiClientError, friendlyErrorMessage } from '@/services/api-error'
+import './login-page.css'
 
-/**
- * Sparkline puramente decorativo — traçado fixo, não deriva de nenhum dado
- * real da conta. Existe só para sugerir "produto financeiro" no painel de
- * marca, então nunca deve ler de API/contexto.
- */
-function DecorativeSparkline() {
+/** Ilustração estática do produto, sem conexão com dados da conta. */
+function FinancialPreview() {
   return (
-    <svg viewBox="0 0 240 72" fill="none" className="h-16 w-full" aria-hidden="true">
-      <defs>
-        <linearGradient id="sparkline-stroke" x1="0" y1="0" x2="240" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="oklch(0.78 0.12 210)" />
-          <stop offset="100%" stopColor="oklch(0.71 0.17 292)" />
-        </linearGradient>
-        <linearGradient id="sparkline-fill" x1="0" y1="0" x2="0" y2="72" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="oklch(0.67 0.185 292)" stopOpacity="0.22" />
-          <stop offset="100%" stopColor="oklch(0.67 0.185 292)" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path
-        d="M0 52 L28 46 L56 55 L84 34 L112 40 L140 20 L168 28 L196 10 L240 16"
-        stroke="url(#sparkline-stroke)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M0 52 L28 46 L56 55 L84 34 L112 40 L140 20 L168 28 L196 10 L240 16 L240 72 L0 72 Z"
-        fill="url(#sparkline-fill)"
-      />
-    </svg>
-  )
-}
-
-/** Grade de pontos sutil ao fundo do painel de marca — puramente ornamental. */
-function DecorativeDotGrid() {
-  return (
-    <svg className="absolute inset-0 h-full w-full opacity-[0.14]" aria-hidden="true">
-      <defs>
-        <pattern id="login-dot-grid" width="28" height="28" patternUnits="userSpaceOnUse">
-          <circle cx="1.5" cy="1.5" r="1.5" fill="oklch(0.965 0.006 270)" />
-        </pattern>
-      </defs>
-      <rect width="100%" height="100%" fill="url(#login-dot-grid)" />
-    </svg>
-  )
-}
-
-function BrandingPanel() {
-  return (
-    <aside
-      aria-hidden="true"
-      className="relative hidden overflow-hidden bg-background lg:flex lg:w-[52%] lg:flex-col lg:justify-between lg:p-12 xl:p-16"
-    >
-      {/* Camadas de profundidade: gradiente radial extremamente sutil + glows pontuais */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(60% 55% at 18% 12%, color-mix(in oklch, var(--accent-primary) 16%, transparent), transparent), radial-gradient(45% 40% at 85% 88%, color-mix(in oklch, var(--accent-secondary) 12%, transparent), transparent)',
-        }}
-      />
-      <DecorativeDotGrid />
-      <div className="pointer-events-none absolute top-1/4 -left-24 size-72 rounded-full bg-accent-primary/18 blur-[110px]" />
-      <div className="pointer-events-none absolute -right-20 bottom-1/4 size-64 rounded-full bg-accent-secondary/14 blur-[110px]" />
-
-      {/* Linhas finas sugerindo eixos/grid de gráfico, bem discretas */}
-      <svg className="pointer-events-none absolute inset-0 h-full w-full opacity-[0.08]" aria-hidden="true">
-        <line x1="0" y1="30%" x2="100%" y2="30%" stroke="oklch(0.965 0.006 270)" strokeWidth="1" />
-        <line x1="0" y1="68%" x2="100%" y2="68%" stroke="oklch(0.965 0.006 270)" strokeWidth="1" />
-        <line x1="22%" y1="0" x2="22%" y2="100%" stroke="oklch(0.965 0.006 270)" strokeWidth="1" />
-      </svg>
-
-      <div className="relative flex animate-in fade-in-0 slide-in-from-left-2 items-center gap-2.5 duration-700">
-        <div className="flex size-10 items-center justify-center rounded-xl border border-accent-primary/25 bg-accent-primary/12 text-accent-primary shadow-[0_12px_28px_-16px_var(--accent-primary)]">
-          <Wallet2 className="size-5" />
+    <div className="login-preview" aria-hidden="true">
+      <div className="login-overview">
+        <div className="login-overview-heading">
+          <span><span className="login-status-dot" /> Seu dinheiro, em perspectiva</span>
+          <ChartNoAxesCombined size={16} />
         </div>
-        <span className="text-base font-semibold tracking-[-0.02em] text-foreground">Finanças</span>
-      </div>
-
-      <div className="relative flex animate-in fade-in-0 slide-in-from-left-2 max-w-md flex-col gap-4 duration-700 [animation-delay:100ms] [animation-fill-mode:backwards]">
-        <h2 className="text-3xl leading-[1.15] font-semibold tracking-[-0.03em] text-balance text-foreground xl:text-4xl">
-          Tenha clareza sobre o seu dinheiro.
-        </h2>
-        <p className="text-sm leading-relaxed text-text-secondary">
-          Contas, transações e metas em um só lugar — visão completa das suas finanças, sem planilhas.
-        </p>
-
-        <div className="mt-4 w-full max-w-[15.5rem] rounded-2xl border border-white/8 bg-white/[0.03] p-4 shadow-[var(--shadow-card)] backdrop-blur-sm">
-          <div className="flex items-center justify-between gap-2 text-[0.6875rem] text-text-tertiary">
-            <span className="flex items-center gap-1">
-              <TrendingUp className="size-3 text-accent-secondary" />
-              Evolução
-            </span>
-            <span className="text-success">+12,4%</span>
-          </div>
-          <DecorativeSparkline />
+        <div className="login-balance">
+          <div><span className="login-preview-label">Saldo total</span><strong><small>R$</small> 12.850<span>,00</span></strong></div>
+          <span className="login-growth"><ArrowUpRight size={13} /> 12,4% <span>no mês</span></span>
+        </div>
+        <div className="login-chart">
+          <svg viewBox="0 0 480 122" fill="none" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="login-chart-fill" x1="0" y1="0" x2="0" y2="122" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#a391ff" stopOpacity=".25" />
+                <stop offset="1" stopColor="#a391ff" stopOpacity="0" />
+              </linearGradient>
+              <linearGradient id="login-chart-line" x1="0" y1="0" x2="480" y2="0" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#7461c8" /><stop offset="1" stopColor="#c8bbff" />
+              </linearGradient>
+            </defs>
+            <path d="M0 25H480 M0 65H480 M0 105H480" stroke="white" strokeOpacity=".06" strokeDasharray="3 6" />
+            <path d="M0 105C20 105 25 87 48 90S80 110 106 86S134 73 158 78S193 45 219 57S250 70 276 43S314 66 345 37S374 46 402 24S450 32 480 8V122H0Z" fill="url(#login-chart-fill)" />
+            <path className="login-chart-line" d="M0 105C20 105 25 87 48 90S80 110 106 86S134 73 158 78S193 45 219 57S250 70 276 43S314 66 345 37S374 46 402 24S450 32 480 8" stroke="url(#login-chart-line)" strokeWidth="2.5" pathLength="1" />
+          </svg>
+          <div className="login-chart-months"><span>JAN</span><span>FEV</span><span>MAR</span><span>ABR</span><span>MAI</span><span>JUN</span></div>
+        </div>
+        <div className="login-cashflow">
+          <div><span className="login-flow-icon"><ArrowDownLeft size={16} /></span><span>Receitas<strong>R$ 8.500,00</strong></span></div>
+          <div><span className="login-flow-icon login-flow-out"><ArrowUpRight size={16} /></span><span>Despesas<strong>R$ 3.240,00</strong></span></div>
         </div>
       </div>
-
-      <p className="relative animate-in fade-in-0 text-xs text-text-tertiary duration-700 [animation-delay:150ms] [animation-fill-mode:backwards]">
-        Controle financeiro pessoal
-      </p>
-    </aside>
-  )
-}
-
-function PasswordToggle({ visible, onToggle }: { visible: boolean; onToggle: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-label={visible ? 'Ocultar senha' : 'Mostrar senha'}
-      aria-pressed={visible}
-      className="absolute top-1/2 right-1 flex size-8 -translate-y-1/2 items-center justify-center rounded-md text-text-tertiary transition-colors hover:text-text-secondary focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/45 focus-visible:outline-none"
-    >
-      {visible ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-    </button>
+      <div className="login-goal">
+        <span className="login-goal-icon"><Target size={18} /></span>
+        <div><span>Reserva de emergência</span><strong>Mais perto do seu objetivo</strong><div className="login-goal-track"><span /></div></div>
+        <span className="login-goal-percent">75%</span>
+      </div>
+      <span className="login-preview-caption">Uma visão do que você pode organizar. Dados ilustrativos.</span>
+    </div>
   )
 }
 
@@ -150,82 +76,65 @@ export function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen w-full bg-background">
-      <BrandingPanel />
+    <div className="login-page">
+      <div className="login-ambient" aria-hidden="true" />
+      <header className="login-header">
+        <div className="login-brand"><span className="login-brand-icon"><Wallet2 size={21} aria-hidden="true" /></span><span>finanças<span className="login-brand-period">.</span></span></div>
+        <span className="login-header-note">Menos planilhas. Mais possibilidades.</span>
+      </header>
 
-      <div className="flex flex-1 flex-col justify-center px-6 py-10 sm:px-10 lg:px-12 xl:px-20">
-        <div className="mx-auto w-full max-w-[23rem] animate-in fade-in-0 slide-in-from-bottom-2 duration-500">
-          <div className="mb-8 flex flex-col items-center gap-2.5 lg:hidden">
-            <div className="flex size-12 items-center justify-center rounded-2xl border border-accent-primary/20 bg-accent-primary/12 text-accent-primary shadow-[0_12px_28px_-16px_var(--accent-primary)]">
-              <Wallet2 className="size-5" />
+      <main className="login-main">
+        <section className="login-story" aria-labelledby="login-story-title">
+          <div className="login-eyebrow"><span /> UM NOVO OLHAR PARA SUAS FINANÇAS</div>
+          <h2 id="login-story-title">Seu dinheiro.<br /><span>Suas possibilidades.</span></h2>
+          <p className="login-story-description">Clareza para o presente. Planos para o futuro.<br className="hidden sm:block" /> Organize sua vida financeira em um só lugar.</p>
+          <FinancialPreview />
+          <div className="login-benefits"><span><Check size={14} aria-hidden="true" /> Contas em dia</span><span><Check size={14} aria-hidden="true" /> Metas no radar</span><span><Check size={14} aria-hidden="true" /> Você no controle</span></div>
+        </section>
+
+        <section className="login-access" aria-labelledby="login-title">
+          <div className="login-form-card">
+            <div className="login-welcome-icon" aria-hidden="true"><ArrowUpRight size={23} /></div>
+            <div className="login-form-heading">
+              <span className="login-form-eyebrow">SEU PRÓXIMO PASSO COMEÇA AQUI</span>
+              <h1 id="login-title">Bem-vindo de volta<span>.</span></h1>
+              <p>Entre e cuide do que importa para você.</p>
             </div>
-            <span className="text-lg font-semibold tracking-[-0.02em] text-foreground">Finanças</span>
-          </div>
 
-          <div className="mb-8">
-            <h1 className="text-2xl font-semibold tracking-[-0.03em] text-foreground">Bem-vindo de volta</h1>
-            <p className="mt-2 text-sm text-text-secondary">Entre na sua conta para continuar.</p>
-          </div>
-
-          <form onSubmit={handleSubmit} className="flex flex-col gap-5" noValidate>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="login-email">E-mail</Label>
-              <div className="relative">
-                <Mail className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-tertiary" />
-                <Input
-                  id="login-email"
-                  type="email"
-                  autoComplete="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="voce@email.com"
-                  className="h-11 pl-10"
-                />
+            <form onSubmit={handleSubmit} className="login-form" noValidate>
+              <div className="login-field">
+                <Label htmlFor="login-email">E-mail</Label>
+                <div className="login-input-wrap">
+                  <Mail className="login-input-icon" size={17} aria-hidden="true" />
+                  <Input id="login-email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} placeholder="voce@email.com" className="login-input" />
+                </div>
               </div>
-            </div>
 
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="login-password">Senha</Label>
-              <div className="relative">
-                <Lock className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-text-tertiary" />
-                <Input
-                  id="login-password"
-                  type={passwordVisible ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="h-11 pr-10 pl-10"
-                />
-                <PasswordToggle visible={passwordVisible} onToggle={() => setPasswordVisible((v) => !v)} />
+              <div className="login-field">
+                <Label htmlFor="login-password">Senha</Label>
+                <div className="login-input-wrap">
+                  <Lock className="login-input-icon" size={17} aria-hidden="true" />
+                  <Input id="login-password" type={passwordVisible ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" className="login-input login-password-input" />
+                  <button type="button" onClick={() => setPasswordVisible((visible) => !visible)} aria-label={passwordVisible ? 'Ocultar senha' : 'Mostrar senha'} aria-pressed={passwordVisible} className="login-password-toggle">
+                    {passwordVisible ? <EyeOff size={17} /> : <Eye size={17} />}
+                  </button>
+                </div>
               </div>
-            </div>
 
-            {error && (
-              <p
-                role="alert"
-                className="animate-in fade-in-0 slide-in-from-top-1 rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-sm text-danger duration-300"
-              >
-                {error}
-              </p>
-            )}
+              {error && <p role="alert" className="rounded-lg border border-danger/20 bg-danger/8 px-3 py-2 text-sm text-danger">{error}</p>}
 
-            <Button type="submit" size="lg" className="mt-1 w-full" disabled={submitting} aria-busy={submitting}>
-              {submitting && <Loader2 className="size-4 animate-spin" />}
-              Entrar
-            </Button>
-          </form>
+              <Button type="submit" size="lg" className="login-submit" disabled={submitting} aria-busy={submitting}>
+                {submitting ? <><Loader2 className="size-4 animate-spin" aria-hidden="true" /> Entrando...</> : <>Entrar <ArrowRight size={17} aria-hidden="true" /></>}
+              </Button>
+            </form>
 
-          <p className="mt-8 text-center text-sm text-text-secondary">
-            Ainda não tem conta?{' '}
-            <Link to={paths.register} className="font-medium text-accent-primary hover:underline">
-              Criar conta
-            </Link>
-          </p>
-        </div>
-      </div>
+            <div className="login-signup"><span>Ainda não tem conta?</span><Link to={paths.register}>Criar conta <ArrowUpRight size={14} aria-hidden="true" /></Link></div>
+          </div>
+          <p className="login-access-note"><Wallet2 size={14} aria-hidden="true" /> Sua vida financeira merece esse cuidado.</p>
+        </section>
+      </main>
+
+      <footer className="login-footer"><span>Controle financeiro pessoal, do seu jeito.</span><span>Organize hoje. Conquiste amanhã.<span className="login-footer-spark" aria-hidden="true">✳</span></span></footer>
     </div>
   )
 }
